@@ -6,18 +6,6 @@ models/
 outputs/
 
 # ------------------------------
-# Optional: Ignore large file types globally
-# Uncomment ONLY if sure
-# *.csv
-# *.npy
-# *.txt
-# *.pkl
-# *.joblib
-# *.log
-# *.zip
-# *.tar.gz
-
-# ------------------------------
 # Python
 # ------------------------------
 __pycache__/
