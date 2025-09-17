@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
-from storage.db import get_db, init_db, save_metrics, save_model_info
+from app.storage.db import get_db, init_db, save_metrics, save_model_info
 from datetime import datetime
 
 PREPROCESSED_DIR = Path("data/preprocessed")
@@ -25,8 +25,8 @@ DATASETS = {
 }
 
 def load_dataset(X_path, y_path):
-    X = np.load(X_path)
-    y = np.load(y_path)
+    X = np.load(X_path, allow_pickle=True)
+    y = np.load(y_path, allow_pickle=True)
 
     return X, y
 

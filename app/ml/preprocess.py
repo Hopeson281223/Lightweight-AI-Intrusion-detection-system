@@ -99,8 +99,21 @@ class Preprocessor:
         df = df.copy()
 
         if self.dataset_type == "cic":
-            X = df.drop(columns=["Label"], errors="ignore")
-            y = df["Label"].values if "Label" in df.columns else None
+            df.columns = df.columns.str.strip()
+
+            label_col = None
+            for cand in ["Label", "label", " Label"]:
+                if cand in df.columns:
+                    label_col = cand
+                    break
+            
+            if label_col is None:
+                print("[WARNING] No label column found in CIC file")
+                return None, None
+            
+            X = df.drop(columns=[label_col])
+            y = df[label_col].values
+            
             numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
             categorical_cols = [c for c in X.columns if c not in numeric_cols]
 
@@ -163,7 +176,6 @@ def batch_preprocess(raw_root="data/raw", output_root="data/preprocessed"):
     cic_dir = Path(raw_root) / "cic-ids2017"
     
     if cic_dir.exists():
-        # First, find the union of all columns across all CIC files
         all_cic_cols = set()
         cic_files = list(cic_dir.glob("*.csv"))
         
@@ -174,20 +186,22 @@ def batch_preprocess(raw_root="data/raw", output_root="data/preprocessed"):
         
         all_cic_cols = sorted(list(all_cic_cols))
         
-        # Process each file with consistent column structure
+        prep = Preprocessor(dataset_type="cic")
+
         for file in cic_files:
             df = pd.read_csv(file)
             
-            # Add missing columns with default value 0
             for col in all_cic_cols:
                 if col not in df.columns:
                     df[col] = 0
             
-            # Ensure consistent column order
             df = df[all_cic_cols]
             
-            prep = Preprocessor(dataset_type="cic")
             X, y = prep.fit_transform(df)
+            if y is None:
+                print(f"[WARNING] Skipping {file.name} (no labels found)")
+                continue
+
             prep.save_preprocessed(X, y, os.path.join(output_root, "cic"), Path(file).stem)
             print(f"[DEBUG] File {file.name} -> aligned shape {X.shape}")
             merged_data["cic"].append(X)
@@ -196,8 +210,10 @@ def batch_preprocess(raw_root="data/raw", output_root="data/preprocessed"):
     # --- NSL-KDD preprocessing ---
     nsl_dir = Path(raw_root) / "nsl-kdd"
     if nsl_dir.exists():
+        prep = Preprocessor(dataset_type="nsl")
         for file in nsl_dir.glob("*.txt"):
-            X, y = preprocess_and_save(str(file), "nsl", output_root)
+            X, y = prep.load_and_preprocess(str(file))
+            prep.save_preprocessed(X, y, os.path.join(output_root, "nsl"), Path(file).stem)
             print(f"[DEBUG] File {file.name} -> shape {X.shape}")
             merged_data["nsl"].append(X)
             merged_labels["nsl"].append(y)
@@ -205,19 +221,14 @@ def batch_preprocess(raw_root="data/raw", output_root="data/preprocessed"):
     # --- Merge and save datasets ---
     for dtype in ["cic", "nsl"]:
         if merged_data[dtype]:
-            # Check if all arrays have the same number of features
             feature_counts = [arr.shape[1] for arr in merged_data[dtype]]
             if len(set(feature_counts)) > 1:
                 print(f"[WARNING] {dtype.upper()} files have different feature counts: {feature_counts}")
                 
-                # Find the maximum number of features
                 max_features = max(feature_counts)
-                
-                # Pad all arrays to have the same number of features
                 padded_arrays = []
                 for arr in merged_data[dtype]:
                     if arr.shape[1] < max_features:
-                        # Pad with zeros
                         pad_width = max_features - arr.shape[1]
                         padded_arr = np.pad(arr, ((0, 0), (0, pad_width)), mode='constant')
                         padded_arrays.append(padded_arr)
@@ -229,6 +240,7 @@ def batch_preprocess(raw_root="data/raw", output_root="data/preprocessed"):
                 X_all = np.vstack(merged_data[dtype])
             
             y_all = np.hstack(merged_labels[dtype])
+
             outdir = Path(output_root) / dtype
             outdir.mkdir(parents=True, exist_ok=True)
             np.save(outdir / f"{dtype}_ALL_X.npy", X_all)
