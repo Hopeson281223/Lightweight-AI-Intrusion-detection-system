@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS models (
     size_kb REAL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     feature_names_json TEXT,
-    label_classes_json TEXT
+    label_classes_json TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """
 
