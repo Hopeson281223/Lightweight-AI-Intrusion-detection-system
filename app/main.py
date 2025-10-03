@@ -8,8 +8,9 @@ import numpy as np
 MODEL_DIR = Path("models")
 PREPROCESSED_DIR = Path("data/preprocessed")
 
-#cache for loaded models to prevent loading from disk with every prediction
+#cache for loaded models/meta to prevent loading from disk with every prediction
 loaded_models = {}
+loaded_meta = {}
 
 # create FastAPI app
 app = FastAPI(title="LAI-IDS", version="0.1.0")
@@ -29,11 +30,18 @@ def load_model(dataset: str):
         return loaded_models[dataset]
     
     model_path = MODEL_DIR / f"decision_tree_{dataset}_model.joblib"
+    meta_path = PREPROCESSED_DIR / dataset / f"{dataset}_ALL_meta.pkl"
+
     if not model_path.exists():
         raise HTTPException(status_code=404, detail=f"Model for {dataset} not found")
     
     model = joblib.load(model_path)
     loaded_models[dataset] = model
+
+    if dataset not in loaded_meta and meta_path.exists():
+        meta = joblib.load(meta_path)
+        loaded_meta[dataset] = meta
+
     return model
 
 # Health check endpoint
@@ -46,6 +54,7 @@ def health_check():
 def predict(req: PredictRequest):
     """Run prediction using chosen dataset model"""
     model = load_model(req.dataset)
+    meta = loaded_meta.get(req.dataset, {})
 
     X_input = np.array(req.features).reshape(1, -1)
 
@@ -55,9 +64,17 @@ def predict(req: PredictRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Prediction failed: {str(e)}")
     
+    #Map to label if meta contains classes
+    label = None
+    if "label_classes" in meta and meta["label_classes"] is not None:
+        classes = meta["label_classes"]
+        if 0 <= pred < len(classes):
+            label = classes[pred]
+
     return {
         "dataset": req.dataset,
         "prediction": int(pred),
+        "label": label,
         "confidence": float(prob) if prob is not None else None
 
     }
@@ -75,7 +92,7 @@ def get_metrics():
     """Return evaluation metrics stored in DB"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, value, timestamp FROM metrics ORDER BY timestamp DESC")
+    cur.execute("SELECT name, value, ts FROM metrics ORDER BY ts DESC")
     rows = cur.fetchall()
     conn.close()
 

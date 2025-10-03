@@ -28,6 +28,8 @@ def load_dataset(X_path, y_path):
     X = np.load(X_path, allow_pickle=True)
     y = np.load(y_path, allow_pickle=True)
 
+    X = np.array(X, dtype=np.float32)
+
     return X, y
 
 def split_data(X, y, test_size=0.2, random_state=42):
