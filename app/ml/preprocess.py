@@ -1,23 +1,31 @@
-import numpy as np
+from __future__ import annotations
 import pandas as pd
+import numpy as np
+from pathlib import Path
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
 import joblib
 import os
 
-# === Load your trained model ===
-MODEL_PATH = "models/decision_tree_cic_model.joblib"
+CIC_LABEL_MAP = {
+    0: "BENIGN",
+    1: "DoS Hulk",
+    2: "DoS GoldenEye",
+    3: "DoS Slowloris",
+    4: "DoS Slowhttptest",
+    5: "DDoS",
+    6: "Bot",
+    7: "Web Attack – Brute Force",
+    8: "Web Attack – XSS",
+    9: "Web Attack – SQL Injection",
+    10: "FTP-Patator",
+    11: "SSH-Patator",
+    12: "Infiltration",
+    13: "Heartbleed",
+}
 
-print(f"[INFO] Loading model from: {MODEL_PATH}")
-model_data = joblib.load(MODEL_PATH)
-
-if isinstance(model_data, tuple):
-    model, feature_names = model_data
-else:
-    model = model_data
-    feature_names = None
-
-print("[INFO] Model loaded successfully.")
-
-# === Features expected by model ===
 LIVE_FEATURES = [
     "Destination Port", "Flow Duration",
     "Total Fwd Packets", "Total Backward Packets",
@@ -37,78 +45,130 @@ LIVE_FEATURES = [
     "Packet Length Std", "Packet Length Variance",
     "Down/Up Ratio", "Subflow Fwd Packets", "Subflow Bwd Packets",
     "Init_Win_bytes_forward", "Init_Win_bytes_backward", "act_data_pkt_fwd",
+    "Label"
 ]
 
-# === Generate synthetic flows ===
-np.random.seed(42)
-n_samples = 10
 
-df = pd.DataFrame({
-    "Destination Port": np.random.choice([20, 21, 22, 23, 25, 53, 80, 110, 443, 8080, 3306, 3389, 9999], n_samples),
-    "Flow Duration": np.random.uniform(0.001, 200.0, n_samples),
-    "Total Fwd Packets": np.random.randint(1, 5000, n_samples),
-    "Total Backward Packets": np.random.randint(1, 5000, n_samples),
-    "Total Length of Fwd Packets": np.random.uniform(100.0, 1e6, n_samples),
-    "Total Length of Bwd Packets": np.random.uniform(100.0, 1e6, n_samples),
-    "Fwd Packet Length Max": np.random.uniform(40.0, 1500.0, n_samples),
-    "Fwd Packet Length Min": np.random.uniform(0.0, 300.0, n_samples),
-    "Fwd Packet Length Mean": np.random.uniform(50.0, 800.0, n_samples),
-    "Fwd Packet Length Std": np.random.uniform(5.0, 300.0, n_samples),
-    "Bwd Packet Length Max": np.random.uniform(40.0, 1500.0, n_samples),
-    "Bwd Packet Length Min": np.random.uniform(0.0, 300.0, n_samples),
-    "Bwd Packet Length Mean": np.random.uniform(50.0, 800.0, n_samples),
-    "Bwd Packet Length Std": np.random.uniform(5.0, 300.0, n_samples),
-    "Flow Bytes/s": np.random.uniform(1.0, 1e6, n_samples),
-    "Flow Packets/s": np.random.uniform(0.1, 10000.0, n_samples),
-    "Flow IAT Mean": np.random.uniform(0.0, 200.0, n_samples),
-    "Flow IAT Std": np.random.uniform(0.0, 100.0, n_samples),
-    "Flow IAT Max": np.random.uniform(0.0, 500.0, n_samples),
-    "Flow IAT Min": np.random.uniform(0.0, 10.0, n_samples),
-    "Fwd PSH Flags": np.random.randint(0, 2, n_samples),
-    "Bwd PSH Flags": np.random.randint(0, 2, n_samples),
-    "Fwd URG Flags": np.random.randint(0, 2, n_samples),
-    "Bwd URG Flags": np.random.randint(0, 2, n_samples),
-    "FIN Flag Count": np.random.randint(0, 2, n_samples),
-    "SYN Flag Count": np.random.randint(0, 2, n_samples),
-    "RST Flag Count": np.random.randint(0, 2, n_samples),
-    "PSH Flag Count": np.random.randint(0, 2, n_samples),
-    "ACK Flag Count": np.random.randint(0, 2, n_samples),
-    "URG Flag Count": np.random.randint(0, 2, n_samples),
-    "CWE Flag Count": np.random.randint(0, 2, n_samples),
-    "ECE Flag Count": np.random.randint(0, 2, n_samples),
-    "Average Packet Size": np.random.uniform(50.0, 1500.0, n_samples),
-    "Fwd Header Length": np.random.uniform(5.0, 50.0, n_samples),
-    "Bwd Header Length": np.random.uniform(5.0, 50.0, n_samples),
-    "Min Packet Length": np.random.uniform(20.0, 60.0, n_samples),
-    "Max Packet Length": np.random.uniform(500.0, 1500.0, n_samples),
-    "Packet Length Mean": np.random.uniform(200.0, 800.0, n_samples),
-    "Packet Length Std": np.random.uniform(10.0, 300.0, n_samples),
-    "Packet Length Variance": np.random.uniform(100.0, 90000.0, n_samples),
-    "Down/Up Ratio": np.random.uniform(0.1, 5.0, n_samples),
-    "Subflow Fwd Packets": np.random.randint(1, 1000, n_samples),
-    "Subflow Bwd Packets": np.random.randint(1, 1000, n_samples),
-    "Init_Win_bytes_forward": np.random.randint(1, 65535, n_samples),
-    "Init_Win_bytes_backward": np.random.randint(1, 65535, n_samples),
-    "act_data_pkt_fwd": np.random.randint(0, 1000, n_samples),
-})
+class Preprocessor:
+    def __init__(self):
+        self.ct = None
+        self.label_encoder = LabelEncoder()
+        self.feature_names = []
 
-# Fill missing columns if model expects others
-for col in LIVE_FEATURES:
-    if col not in df.columns:
-        df[col] = 0
+    #Build ColumnTransformer
+    def _build_ct(self, numeric_cols, categorical_cols):
+        num_pipe = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler())
+        ])
 
-# Keep only features the model needs
-X = df[[col for col in LIVE_FEATURES if col != "Label"]]
+        cat_pipe = Pipeline([
+            ('imputer', SimpleImputer(strategy='most_frequent')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+        ])
 
-print(f"[INFO] Generated {len(X)} synthetic flows with {X.shape[1]} features.")
+        return ColumnTransformer([
+            ('num', num_pipe, numeric_cols),
+            ('cat', cat_pipe, categorical_cols)
+        ])
+        
+    def fit_transform(self, df: pd.DataFrame):
+        df = df.copy()
+        df.columns = df.columns.str.strip()
 
-# === Predict ===
-preds = model.predict(X)
-df["Prediction"] = np.where(preds == 0, "NORMAL", "ANOMALOUS")
+        label_col = next((c for c in df.columns if "label" in c.lower()), None)
+        if label_col is None:
+            print("[WARNING] No label column found in CIC file")
+            return None, None
 
-# === Save results ===
-OUTPUT_FILE = "simulated_full_predictions.csv"
-df.to_csv(OUTPUT_FILE, index=False)
+    
+        y_raw = df[label_col].values
+        X = df.drop(columns=[label_col])
 
-print(f"[SUCCESS] Predictions saved to {OUTPUT_FILE}")
-print(df[["Destination Port", "Flow Duration", "Flow Bytes/s", "Prediction"]])
+        available_features = [c for c in LIVE_FEATURES if c in X.columns]
+        X = X[available_features]
+
+        def clean_label(lbl):
+            if isinstance(lbl, str):
+                return lbl.encode("ascii", errors="ignore").decode().strip()
+            return str(lbl)
+        
+        y = []
+        for lbl in y_raw:
+            try:
+                lbl_int = int(lbl)
+                label_str = CIC_LABEL_MAP.get(lbl_int, clean_label(lbl))
+            except ValueError:
+                label_str = str(lbl).strip()
+                 
+            if "BENIGN" in label_str.upper():
+                y.append("NORMAL")
+            else:
+                y.append("ANOMALOUS")
+        
+        numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+        categorical_cols = [c for c in X.columns if c not in numeric_cols]
+
+        X = X.replace([np.inf, -np.inf], np.nan) #turn infinitites to be handled as NaN
+
+        self.ct = self._build_ct(numeric_cols, categorical_cols)    
+        X_transformed = self.ct.fit_transform(X)   
+        self.feature_names = self.ct.get_feature_names_out().tolist()
+        y_encoded = self.label_encoder.fit_transform(y)
+        self.original_labels = y.copy()
+
+        return X_transformed, y_encoded
+    
+    def save_preprocessed(self, X, y, output_dir: str, file_prefix: str):
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        np.save(os.path.join(output_dir, f"{file_prefix}_X.npy"), X)
+        np.save(os.path.join(output_dir, f"{file_prefix}_y.npy"), y)
+
+        meta = {
+            "feature_names": self.feature_names,
+            "label_classes": self.label_encoder.classes_.tolist()
+        }         
+        joblib.dump(meta, os.path.join(output_dir, f"{file_prefix}_meta.pkl"))
+
+#process all files in a dataset
+def batch_preprocess(raw_root="data/raw/cic-ids2017", output_root="data/preprocessed/cic"):
+    """Preprocess all CIC-IDS2017 files using only live-detectable features."""
+    merged_data, merged_labels = [], []
+    feature_names = None
+
+    cic_dir = Path(raw_root)
+    if not cic_dir.exists():
+        print(f"[ERROR] Directory not found: {cic_dir}")
+        return
+
+    cic_files = list(cic_dir.glob("*.csv"))
+    for file in cic_files:
+        print(f"[INFO] Processing {file.name} ...")
+        df = pd.read_csv(file)
+        prep = Preprocessor()
+        X, y = prep.fit_transform(df)
+        if X is None or y is None:
+            continue
+
+        feature_names = prep.feature_names
+        prep.save_preprocessed(X, y, output_root, Path(file).stem)
+        merged_data.append(X)
+        merged_labels.append(y)
+
+    if merged_data:
+        X_all = np.vstack(merged_data)
+        y_all = np.hstack(merged_labels)
+
+        np.save(Path(output_root) / "CIC_ALL_X.npy", X_all)
+        np.save(Path(output_root) / "CIC_ALL_y.npy", y_all)
+
+        joblib.dump({
+            "feature_names": feature_names,
+            "label_classes": prep.label_encoder.classes_.tolist()
+        }, Path(output_root) / "CIC_ALL_meta.pkl")
+
+        print(f"[+] Saved merged CIC dataset with shape {X_all.shape}")
+
+
+if __name__ == "__main__":
+    batch_preprocess()
