@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAI-IDS - Lightweight AI Intrusion Detection System</title>
+    <link rel="stylesheet" href="/frontend/css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-shield-alt"></i> LAI-IDS</h1>
+                <p class="subtitle">Lightweight AI Intrusion Detection System</p>
+            </div>
+            <div class="status-indicator" id="systemStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Checking...</span>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <div class="dashboard">
+            <!-- Control Panel -->
+            <div class="card control-panel">
+                <h2><i class="fas fa-play-circle"></i> Capture Control</h2>
+                <div class="control-buttons">
+                    <button id="startBtn" class="btn btn-success">
+                        <i class="fas fa-play"></i> Start Capture
+                    </button>
+                    <button id="stopBtn" class="btn btn-danger" disabled>
+                        <i class="fas fa-stop"></i> Stop Capture
+                    </button>
+                    <button id="refreshBtn" class="btn btn-info">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="interface-selector">
+                    <label for="interfaceSelect">Network Interface:</label>
+                    <select id="interfaceSelect">
+                        <option value="">Loading interfaces...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Live Statistics -->
+            <div class="card stats-card">
+                <h2><i class="fas fa-chart-bar"></i> Live Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="packetsCaptured">0</div>
+                        <div class="stat-label">Packets Captured</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="activeFlows">0</div>
+                        <div class="stat-label">Active Flows</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalPackets">0</div>
+                        <div class="stat-label">Total in DB</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="recentAlerts">0</div>
+                        <div class="stat-label">Recent Alerts</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Threat Distribution -->
+            <div class="card threat-card">
+                <h2><i class="fas fa-exclamation-triangle"></i> Threat Distribution</h2>
+                <div id="threatChart" class="threat-chart">
+                    <div class="chart-placeholder">Loading threat data...</div>
+                </div>
+            </div>
+
+            <!-- Live Alerts -->
+            <div class="card alerts-card">
+                <h2><i class="fas fa-bell"></i> Recent Alerts</h2>
+                <div id="alertsList" class="alerts-list">
+                    <div class="no-alerts">No recent alerts</div>
+                </div>
+            </div>
+
+            <!-- Capture Log -->
+            <div class="card log-card">
+                <h2><i class="fas fa-list-alt"></i> Capture Log</h2>
+                <div id="captureLog" class="capture-log">
+                    <div class="log-entry">System ready. Waiting for capture start...</div>
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="card info-card">
+                <h2><i class="fas fa-info-circle"></i> System Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Status:</span>
+                        <span id="captureStatus" class="info-value">Stopped</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Interface:</span>
+                        <span id="currentInterface" class="info-value">Not set</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Uptime:</span>
+                        <span id="systemUptime" class="info-value">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">ML Model:</span>
+                        <span id="mlModel" class="info-value">CIC-IDS2017</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/frontend/js/app.js"></script>
+</body>
+</html>

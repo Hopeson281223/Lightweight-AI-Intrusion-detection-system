@@ -34,3 +34,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+postman_payloads.json
+anomalous_samples.json
+anomalous_payload.json
+diagnose_model.py

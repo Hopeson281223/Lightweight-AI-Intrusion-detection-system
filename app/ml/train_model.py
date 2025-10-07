@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
-from datetime import datetime
+from collections import Counter
 
 # Directories
 PREPROCESSED_DIR = Path("data/preprocessed/cic")
@@ -34,10 +34,11 @@ def split_data(X, y, test_size=0.2, random_state=42):
 
 
 def train_lightweight_decision_tree(X_train, y_train, max_depth=10, min_samples_split=20):
-    """Train a lightweight Decision Tree classifier."""
+    """Train a lightweight Decision Tree classifier with class balancing."""
     clf = DecisionTreeClassifier(
         max_depth=max_depth,
         min_samples_split=min_samples_split,
+        class_weight="balanced",  
         random_state=42
     )
     clf.fit(X_train, y_train)
@@ -64,7 +65,8 @@ def main():
     print("[INFO] Loading preprocessed CIC dataset...")
     X, y = load_dataset(DATASET["X"], DATASET["y"])
 
-    print(f"[INFO] Dataset shape: {X.shape}, Labels: {len(np.unique(y))}")
+    print(f"[INFO] Dataset shape: {X.shape}, Unique labels: {len(np.unique(y))}")
+    print("[INFO] Label distribution:", Counter(y))
 
     X_train, X_test, y_train, y_test = split_data(X, y)
     print(f"[INFO] Train shape: {X_train.shape}, Test shape: {X_test.shape}")
