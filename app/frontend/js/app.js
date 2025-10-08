@@ -1,6 +1,6 @@
 class LAIIDSFrontend {
     constructor() {
-        this.baseUrl = window.location.origin; // Use current origin instead of hardcoded URL
+        this.baseUrl = window.location.origin;
         this.isCapturing = false;
         this.updateInterval = null;
         this.init();
@@ -44,22 +44,15 @@ class LAIIDSFrontend {
     }
 
     async startCapture() {
-        const interfaceSelect = document.getElementById('interfaceSelect');
-        const interface = interfaceSelect.value;
-
-        if (!interface) {
+        const iface = document.getElementById('interfaceSelect').value;
+        if (!iface) {
             this.showError('Please select a network interface first');
             return;
         }
 
         try {
             this.log('Starting packet capture...', 'info');
-            
-            const data = await this.apiCall('/start', {
-                method: 'POST',
-                body: JSON.stringify({ interface: interface })
-            });
-
+            const data = await this.apiCall(`/start?interface=${encodeURIComponent(iface)}`, { method: 'POST' });
             this.isCapturing = true;
             this.updateUI();
             this.log(`Capture started on ${data.interface}`, 'success');
@@ -71,11 +64,7 @@ class LAIIDSFrontend {
     async stopCapture() {
         try {
             this.log('Stopping packet capture...', 'info');
-            
-            const data = await this.apiCall('/stop', {
-                method: 'POST'
-            });
-
+            const data = await this.apiCall('/stop', { method: 'POST' });
             this.isCapturing = false;
             this.updateUI();
             this.log(`Capture stopped. ${data.message}`, 'success');
@@ -84,15 +73,12 @@ class LAIIDSFrontend {
         }
     }
 
-    async setInterface(interface) {
-        if (!interface) return;
+    async setInterface(iface) {
+        if (!iface) return;
 
         try {
-            await this.apiCall(`/interface/${encodeURIComponent(interface)}`, {
-                method: 'POST'
-            });
-
-            this.log(`Interface set to: ${interface}`, 'success');
+            await this.apiCall(`/interface/${encodeURIComponent(iface)}`, { method: 'POST' });
+            this.log(`Interface set to: ${iface}`, 'success');
         } catch (error) {
             this.showError(`Error setting interface: ${error.message}`);
         }
@@ -104,7 +90,7 @@ class LAIIDSFrontend {
             const select = document.getElementById('interfaceSelect');
             select.innerHTML = '';
 
-            data.interfaces.forEach(iface => {
+            data.interfaces.forEach((iface) => {
                 const option = document.createElement('option');
                 option.value = iface;
                 option.textContent = iface;
@@ -112,7 +98,6 @@ class LAIIDSFrontend {
             });
 
             if (data.interfaces.length > 0) {
-                // Auto-select the first interface
                 select.value = data.interfaces[0];
                 this.setInterface(data.interfaces[0]);
             }
@@ -124,54 +109,40 @@ class LAIIDSFrontend {
 
     async updateStats() {
         try {
-            // Update status
-            const status = await this.apiCall('/status');
-            this.isCapturing = status.is_capturing;
-            
-            document.getElementById('packetsCaptured').textContent = status.packets_captured;
-            document.getElementById('activeFlows').textContent = status.active_flows;
-            document.getElementById('captureStatus').textContent = status.is_capturing ? 'Running' : 'Stopped';
-            document.getElementById('currentInterface').textContent = status.interface;
-
-            // Update stats
             const stats = await this.apiCall('/stats');
-            
-            document.getElementById('totalPackets').textContent = stats.total_packets;
-            document.getElementById('recentAlerts').textContent = stats.recent_alerts;
-            
+            const captureStatus = stats.capture_status || {};
+
+            document.getElementById('captureStatus').textContent = captureStatus.is_capturing ? 'Running' : 'Stopped';
+            document.getElementById('packetsCaptured').textContent = captureStatus.packets_captured || 0;
+            document.getElementById('activeFlows').textContent = captureStatus.active_flows || 0;
+            document.getElementById('totalPackets').textContent = stats.total_packets || 0;
+            document.getElementById('recentAlerts').textContent = stats.recent_alerts || 0;
+
             this.updateThreatChart(stats.threat_distribution);
             this.updateSystemStatus(true);
-
-        } catch (error) {
-            console.error('Error updating stats:', error);
+        } catch (err) {
+            this.log(`Error fetching stats: ${err}`, 'error');
             this.updateSystemStatus(false);
         }
     }
 
     updateThreatChart(threatDistribution) {
         const chart = document.getElementById('threatChart');
-        
         if (!threatDistribution || Object.keys(threatDistribution).length === 0) {
             chart.innerHTML = '<div class="no-alerts">No traffic analyzed yet</div>';
             return;
         }
 
-        let total = 0;
-        Object.values(threatDistribution).forEach(count => {
-            total += count;
-        });
-
+        const total = Object.values(threatDistribution).reduce((sum, val) => sum + val, 0);
         if (total === 0) {
             chart.innerHTML = '<div class="no-alerts">No threats detected</div>';
             return;
         }
 
         let chartHTML = '<div class="threat-bars">';
-        
         Object.entries(threatDistribution).forEach(([label, count]) => {
-            const percentage = total > 0 ? (count / total) * 100 : 0;
+            const percentage = (count / total) * 100;
             const threatClass = label.toLowerCase().includes('anomalous') ? 'anomalous' : 'normal';
-            
             chartHTML += `
                 <div class="threat-bar">
                     <div class="threat-label">
@@ -184,7 +155,6 @@ class LAIIDSFrontend {
                 </div>
             `;
         });
-        
         chartHTML += '</div>';
         chart.innerHTML = chartHTML;
     }
@@ -225,30 +195,21 @@ class LAIIDSFrontend {
         const logContainer = document.getElementById('captureLog');
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${type}`;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        logEntry.textContent = `[${timestamp}] ${message}`;
-        
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
         logContainer.appendChild(logEntry);
         logContainer.scrollTop = logContainer.scrollHeight;
-        
-        // Keep only last 50 log entries
+
         const entries = logContainer.querySelectorAll('.log-entry');
-        if (entries.length > 50) {
-            entries[0].remove();
-        }
+        if (entries.length > 50) entries[0].remove();
     }
 
     showError(message) {
         this.log(`ERROR: ${message}`, 'error');
-        // Optional: show toast notification instead of alert
-        console.error('Error:', message);
+        console.error(message);
     }
 
     startAutoRefresh() {
-        this.updateInterval = setInterval(() => {
-            this.updateStats();
-        }, 2000); // Update every 2 seconds
+        this.updateInterval = setInterval(() => this.updateStats(), 2000);
     }
 
     manualRefresh() {
@@ -256,22 +217,9 @@ class LAIIDSFrontend {
         this.log('Manual refresh triggered', 'info');
     }
 
-    // Cleanup on page unload
     destroy() {
-        if (this.updateInterval) {
-            clearInterval(this.updateInterval);
-        }
+        if (this.updateInterval) clearInterval(this.updateInterval);
     }
 }
 
-// Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.laiidsApp = new LAIIDSFrontend();
-});
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (window.laiidsApp) {
-        window.laiidsApp.destroy();
-    }
-});
+document.addEventListener('DOMContentLoaded', () => { window.laiidsApp = new LAIIDSFrontend(); });

@@ -234,7 +234,7 @@ def predict(req: PredictRequest):
         label = classes[pred] if 0 <= pred < len(classes) else "UNKNOWN"
 
     # Confidence threshold
-    CONF_THRESHOLD = 0.75
+    CONF_THRESHOLD = 0.70
     if prob is not None and prob < CONF_THRESHOLD:
         label = "ANOMALOUS"
 
