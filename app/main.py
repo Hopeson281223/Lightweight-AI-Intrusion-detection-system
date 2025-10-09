@@ -13,22 +13,16 @@ import asyncio
 from app.storage.db import init_db, get_db
 from app.ml.preprocess import LIVE_FEATURES, pd
 
-# -----------------------
 # Directories
-# -----------------------
 MODEL_DIR = Path("models")
 PREPROCESSED_DIR = Path("data/preprocessed")
 
-# -----------------------
 # Cache and live logs
-# -----------------------
 loaded_models = {}
 loaded_meta = {}
-live_logs = deque()  # Use deque for efficient pops
+live_logs = deque()  # Uses deque for efficient pops
 
-# -----------------------
 # FastAPI app
-# -----------------------
 app = FastAPI(title="LAI-IDS", version="0.1.0")
 
 app.add_middleware(
@@ -39,30 +33,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend
+# Serves frontend
 app.mount("/frontend", StaticFiles(directory="app/frontend"), name="frontend")
 
 @app.get("/")
 def root():
     return FileResponse("app/frontend/index.html")
 
-# -----------------------
 # Startup
-# -----------------------
 @app.on_event("startup")
 def startup_event():
     init_db()
 
-# -----------------------
 # Request models
-# -----------------------
 class PredictRequest(BaseModel):
     dataset: str
     features: list[float]
 
-# -----------------------
 # Load model
-# -----------------------
 def load_model(dataset: str):
     """Load model and metadata from disk or cache"""
     if dataset in loaded_models:
@@ -86,16 +74,12 @@ def load_model(dataset: str):
     loaded_meta[dataset] = {**meta, "ct": ct, "label_encoder": le}
     return model, loaded_meta[dataset]
 
-# -----------------------
 # Health check
-# -----------------------
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-# -----------------------
 # Capture
-# -----------------------
 @app.post("/start")
 def start_capture(interface: str = None):
     """Start live packet capture on specific interface"""
@@ -142,9 +126,7 @@ def set_interface(interface_name: str):
     else:
         raise HTTPException(status_code=500, detail=packet_capture.last_error or "Failed to set interface")
 
-# -----------------------
 # stats
-# -----------------------
 @app.get("/stats")
 def get_stats():
     """Get system statistics"""
@@ -187,9 +169,8 @@ def get_stats():
         }
     finally:
         conn.close()
-# -----------------------
+        
 # Prediction
-# -----------------------
 @app.post("/predict")
 def predict(req: PredictRequest):
     model, meta = load_model(req.dataset)
@@ -206,7 +187,7 @@ def predict(req: PredictRequest):
 
     df = pd.DataFrame([req.features], columns=LIVE_FEATURES)
 
-    # Optional: log-transform extreme columns
+    # log-transform extreme columns
     extreme_cols = ["Total Length of Fwd Packets", "Total Length of Bwd Packets", "Flow Bytes/s"]
     for col in extreme_cols:
         if col in df.columns:
@@ -234,7 +215,7 @@ def predict(req: PredictRequest):
         label = classes[pred] if 0 <= pred < len(classes) else "UNKNOWN"
 
     # Confidence threshold
-    CONF_THRESHOLD = 0.70
+    CONF_THRESHOLD = 0.75
     if prob is not None and prob < CONF_THRESHOLD:
         label = "ANOMALOUS"
 
@@ -250,9 +231,7 @@ def predict(req: PredictRequest):
         "confidence": float(prob) if prob is not None else None
     }
 
-# -----------------------
 # WebSocket for live logs
-# -----------------------
 @app.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket):
     await websocket.accept()
@@ -265,9 +244,7 @@ async def websocket_logs(websocket: WebSocket):
     except Exception as e:
         print(f"[WS] Connection closed: {e}")
 
-# -----------------------
 # Other endpoints
-# -----------------------
 @app.get("/packets")
 def get_packets():
     return [{"id": 1, "src_ip": "192.168.0.10", "dst_ip": "10.0.0.5", "protocol": "TCP"}]

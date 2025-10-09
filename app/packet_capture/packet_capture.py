@@ -1,4 +1,3 @@
-# app/packet_capture/packet_capture.py - FIXED DATABASE VERSION
 import threading
 import time
 from collections import defaultdict, deque
@@ -10,7 +9,7 @@ from datetime import datetime
 import numpy as np
 import sqlite3
 from app.ml.preprocess import LIVE_FEATURES
-from app.storage.db import get_db  # Use your existing database connection
+from app.storage.db import get_db  
 
 class LivePacketCapture:
     def __init__(self, model_endpoint="http://localhost:8000/predict"):
@@ -43,13 +42,13 @@ class LivePacketCapture:
             interfaces = get_windows_if_list()
             return [iface['name'] for iface in interfaces]
         except Exception as e:
-            print(f"❌ Error listing interfaces: {e}")
+            print(f"Error listing interfaces: {e}")
             return [self.current_interface]
         
     def set_interface(self, interface_name):
         if not self.is_capturing:
             self.current_interface = interface_name
-            print(f"🎯 Interface set to: {interface_name}")
+            print(f"Interface set to: {interface_name}")
             return True
         return False
     
@@ -96,22 +95,22 @@ class LivePacketCapture:
             ]
             return [float(x) for x in features]
         except Exception as e:
-            print(f"❌ Flow feature extraction error: {e}")
+            print(f"Flow feature extraction error: {e}")
             return None
     
     def flush_old_flows(self):
-        """Flush completed flows for analysis - FIXED VERSION"""
+        """Flush completed flows for analysis"""
         now = time.time()
         to_delete = []
         
-        # First, collect all flows to process
-        for key, flow in list(self.flows.items()):  # Use list() to avoid modification during iteration
+        # First collects all flows to process
+        for key, flow in list(self.flows.items()):  # Uses list() to avoid modification during iteration
             if flow["timestamps"] and now - flow["timestamps"][-1] > self.MAX_FLOW_AGE:
-                to_delete.append((key, flow.copy()))  # Store a copy of the flow data
+                to_delete.append((key, flow.copy()))  # Stores a copy of the flow data
         
-        # Then process and delete them
+        # Then processes and deletes them
         for key, flow_data in to_delete:
-            # Check if key still exists (it might have been processed by another thread)
+            # Checks if key still exists
             if key not in self.flows:
                 continue
                 
@@ -119,14 +118,14 @@ class LivePacketCapture:
             src, dst = key[0], key[1]
             
             if features:
-                print(f"🔍 Flow completed: {src} -> {dst}:{key[3]} (Packets: {len(flow_data['timestamps'])})")
+                print(f"Flow completed: {src} -> {dst}:{key[3]} (Packets: {len(flow_data['timestamps'])})")
                 
                 # Save to database
                 packet_id = self.save_flow_to_database(key, flow_data, features)
                 if packet_id:
                     self.send_prediction(features, packet_id)
             
-            # Safe deletion - check if key still exists
+            # Safe deletion - checks if key still exists
             if key in self.flows:
                 del self.flows[key]
     
@@ -153,11 +152,11 @@ class LivePacketCapture:
             conn.commit()
             conn.close()
             
-            print(f"💾 Saved flow as packet {packet_id}")
+            print(f"Saved flow as packet {packet_id}")
             return packet_id
             
         except Exception as e:
-            print(f"❌ Database error: {e}")
+            print(f"Database error: {e}")
             return None
     
     def send_prediction(self, features, packet_id):
@@ -185,15 +184,15 @@ class LivePacketCapture:
                         "INSERT INTO alerts (prediction_id, severity, message) VALUES (?, ?, ?)",
                         (cursor.lastrowid, "HIGH", f"Anomalous traffic (conf: {result['confidence']:.2f})")
                     )
-                    print(f"🚨 ALERT: Anomalous traffic detected!")
+                    print(f"ALERT: Anomalous traffic detected!")
                 
                 conn.commit()
                 conn.close()
                 
-                print(f"✅ {result['label']} (conf: {result['confidence']:.2f})")
+                print(f"{result['label']} (conf: {result['confidence']:.2f})")
                 
         except Exception as e:
-            print(f"❌ Prediction error: {e}")
+            print(f"Prediction error: {e}")
     
     def packet_handler(self, packet):
         """Process each packet and add to flows"""
@@ -233,18 +232,18 @@ class LivePacketCapture:
             self.flows[key]["fwd_headers"].append(header_len)
 
             # Show live packet info
-            print(f"📦 Packet #{self.packet_count}: {src} -> {dst}:{dport}")
+            print(f"Packet #{self.packet_count}: {src} -> {dst}:{dport}")
             
             # Flush old flows periodically
             if self.packet_count % 10 == 0:
                 self.flush_old_flows()
                     
         except Exception as e:
-            print(f"❌ Packet handler error: {e}")
+            print(f"Packet handler error: {e}")
     
     def _capture_loop(self):
         """Main capture loop"""
-        print(f"🎯 Starting FLOW-BASED capture on {self.current_interface}")
+        print(f"Starting FLOW-BASED capture on {self.current_interface}")
         try:
             sniff(
                 iface=self.current_interface,
@@ -254,7 +253,7 @@ class LivePacketCapture:
                 stop_filter=lambda x: not self.is_capturing
             )
         except Exception as e:
-            print(f"❌ Capture error: {e}")
+            print(f"Capture error: {e}")
     
     def start_capture(self, interface=None):
         if self.is_capturing:
@@ -273,7 +272,7 @@ class LivePacketCapture:
         self.capture_thread.daemon = True
         self.capture_thread.start()
         
-        print("✅ Flow-based packet capture started!")
+        print("Flow-based packet capture started!")
         return True
     
     def stop_capture(self):
@@ -284,7 +283,7 @@ class LivePacketCapture:
         self.is_capturing = False
         self.last_error = None
         
-        print("🛑 Stopping capture immediately (fast mode)...")
+        print("Stopping capture immediately (fast mode)...")
         
         flows_count = len(self.flows)
         self.flows.clear()
@@ -292,7 +291,7 @@ class LivePacketCapture:
         if self.capture_thread:
             self.capture_thread.join(timeout=2.0)
         
-        print(f"🛑 Capture stopped. Total packets: {self.packet_count}, Flows cleared: {flows_count}")
+        print(f"Capture stopped. Total packets: {self.packet_count}, Flows cleared: {flows_count}")
         return True
     
     def get_status(self):
@@ -303,5 +302,4 @@ class LivePacketCapture:
             "interface": self.current_interface
         }
 
-# Singleton instance
 packet_capture = LivePacketCapture()

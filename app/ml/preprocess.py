@@ -90,7 +90,6 @@ class Preprocessor:
             y_raw = df[label_col].values
             X = df.drop(columns=[label_col])
             
-            # FIXED MAPPING
             y = []
             for lbl in y_raw:
                 label_str = str(lbl).strip()  # Don't convert to upper yet
@@ -99,7 +98,6 @@ class Preprocessor:
                 else:
                     y.append("ANOMALOUS")
         
-        # Continue with rest of processing...
         available_features = []
         seen_features = set()
         for c in LIVE_FEATURES:
@@ -110,7 +108,6 @@ class Preprocessor:
         X = X[available_features]
         print(f"[INFO] Using {len(available_features)} unique features from LIVE_FEATURES")
 
-        # Rest of your existing code...
         numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
         categorical_cols = [c for c in X.columns if c not in numeric_cols]
 
@@ -173,10 +170,10 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
             df = pd.read_csv(file)
             df = df.loc[:, ~df.columns.duplicated()]
             
-            # FIX: Clean column names (remove leading/trailing spaces)
+            # Clean column names (remove spaces)
             df.columns = df.columns.str.strip()
             
-            # FIX: Standardize label column name to 'Label'
+            # Standardize label column name to 'Label'
             for col in df.columns:
                 if 'label' in col.lower():
                     if col != 'Label':
@@ -195,7 +192,7 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
         live_df = pd.read_csv(live_path)
         live_df = live_df.loc[:, ~live_df.columns.duplicated()]
         
-        # FIX: Clean column names
+        # Clean column names
         live_df.columns = live_df.columns.str.strip()
         
         # RENAME the 'label' column to 'Label' to match CIC data
@@ -213,7 +210,6 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
     # Merge all DataFrames
     merged_df = pd.concat(dfs, ignore_index=True, sort=False)
 
-    # DEBUG: Check merged dataframe columns
     print(f"[DEBUG] Merged dataframe columns:")
     all_label_cols = [col for col in merged_df.columns if 'label' in col.lower()]
     print(f"  All label columns: {all_label_cols}")
@@ -225,10 +221,8 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
 
     print(f"[INFO] Merged dataset shape: {merged_df.shape}")
 
-    # FIXED LABEL MAPPING
     print("[INFO] Applying FIXED label mapping...")
 
-    # DEBUG: Show what unique labels we actually have
     print("[DEBUG] Unique labels found in raw data:")
     unique_labels = merged_df['Label'].dropna().unique()
     for label in unique_labels[:20]:  # Show first 20 unique labels
@@ -238,13 +232,13 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
     def map_label_correctly(label_value):
         """CORRECT label mapping: BENIGN->NORMAL, live normal->NORMAL, attacks->ANOMALOUS"""
         if pd.isna(label_value):
-            return "ANOMALOUS"  # Assume missing values are anomalous for safety
+            return "ANOMALOUS"  # Assumes missing values are anomalous for safety
         
         label_str = str(label_value).strip()  # Keep original case
         
         # Map to NORMAL - BENIGN from CIC and 'normal' from live capture
         if (label_str == "BENIGN" or 
-            label_str == "normal" or  # from your live capture
+            label_str == "normal" or  
             label_str == "0"):
             return "NORMAL"
         
@@ -266,7 +260,7 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
             label_str == "Heartbleed"):
             return "ANOMALOUS"
         
-        # Default: if we don't recognize it, assume it's ANOMALOUS for safety
+        # If we don't recognize it, assume it's ANOMALOUS for safety
         return "ANOMALOUS"
 
     # Apply the corrected mapping
@@ -284,12 +278,11 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
     for label, count in mapped_counts.items():
         print(f"  {label}: {count} samples")
 
-    # Now use the mapped labels for preprocessing
+    # Uses the mapped labels for preprocessing
     label_col = 'Mapped_Label'
     y_raw = merged_df[label_col].values
     X = merged_df.drop(columns=[label_col, 'Label'])  # Remove both label columns
     
-    # Continue with existing preprocessing...
     available_features = []
     seen_features = set()
     for c in LIVE_FEATURES:
@@ -300,14 +293,12 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
     X = X[available_features]
     print(f"[INFO] Using {len(available_features)} unique features from LIVE_FEATURES")
 
-    # The labels are already correctly mapped, just encode them
-    y = y_raw  # Already correct: "NORMAL" or "ANOMALOUS"
+    y = y_raw  
 
     # numeric / categorical split
     numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
     categorical_cols = [c for c in X.columns if c not in numeric_cols]
 
-    # Continue with existing preprocessing...
     X = X.replace([np.inf, -np.inf], np.nan)
 
     prep = Preprocessor()
@@ -329,6 +320,5 @@ def batch_preprocess(raw_root="data/raw/cic-ids2017", live_file="data/raw/live_c
     prep.save_preprocessed(X_transformed, y_encoded, output_root, "CIC_ALL")
     print(f"[+] Saved FIXED dataset with shape {X_transformed.shape}")
 
-# Replace your main call
 if __name__ == "__main__":
     batch_preprocess()
