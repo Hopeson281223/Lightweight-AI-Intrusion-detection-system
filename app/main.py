@@ -5,9 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
 from app.packet_capture.packet_capture import packet_capture
+from datetime import datetime
+from collections import deque
+import json
 import joblib
 import numpy as np
-from collections import deque
+
 import asyncio
 
 from app.storage.db import init_db, get_db
@@ -27,7 +30,7 @@ app = FastAPI(title="LAI-IDS", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +52,9 @@ def startup_event():
 class PredictRequest(BaseModel):
     dataset: str
     features: list[float]
+    src_ip: str | None = None
+    dst_ip: str | None = None
+    protocol: str | None = None
 
 # Load model
 def load_model(dataset: str):
@@ -115,7 +121,7 @@ def capture_status():
 def list_interfaces():
     """List available network interfaces"""
     interfaces = packet_capture.list_available_interfaces()
-    return {"interfaces": interfaces}
+    return {"interfaces": sorted(interfaces, key=lambda x: x["name"].lower())}
 
 @app.post("/interface/{interface_name}")
 def set_interface(interface_name: str):
@@ -219,10 +225,18 @@ def predict(req: PredictRequest):
     if prob is not None and prob < CONF_THRESHOLD:
         label = "ANOMALOUS"
 
-    # Add to live logs
-    conf_display = f"{prob:.2f}" if prob is not None else "N/A"
-    log_msg = f"{req.features[:5]} -> {label} (conf: {conf_display})"
-    live_logs.append(log_msg)
+    # Add structured log to live feed
+    log_entry = {
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "label": label,
+        "confidence": float(prob) if prob is not None else None,
+        "src_ip": req.src_ip or "N/A",
+        "dst_ip": req.dst_ip or "N/A",
+        "protocol": req.protocol or "N/A",
+        "message": f"Prediction result: {label} (conf: {prob:.2f})" if prob else f"Prediction result: {label}"
+    }
+    live_logs.append(json.dumps(log_entry))
+
 
     return {
         "dataset": req.dataset,

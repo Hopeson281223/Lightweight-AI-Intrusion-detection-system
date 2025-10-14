@@ -94,6 +94,5 @@ def main():
     print(f"Accuracy: {acc:.4f}")
     print(f"Model size: {model_size_kb:.2f} KB")
 
-
 if __name__ == "__main__":
     main()

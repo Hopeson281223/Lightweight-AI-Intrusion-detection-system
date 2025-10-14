@@ -1,14 +1,17 @@
+/* -------------------- RESET -------------------- */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+/* -------------------- BODY -------------------- */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     padding: 20px;
+    color: #2c3e50;
 }
 
 .container {
@@ -16,12 +19,12 @@ body {
     margin: 0 auto;
 }
 
-/* Header */
+/* -------------------- HEADER -------------------- */
 .header {
     background: rgba(255, 255, 255, 0.95);
     padding: 20px;
     border-radius: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -31,7 +34,7 @@ body {
 
 .header-content h1 {
     color: #2c3e50;
-    font-size: 2.5em;
+    font-size: 2.4em;
     margin-bottom: 5px;
 }
 
@@ -42,7 +45,7 @@ body {
 
 .subtitle {
     color: #7f8c8d;
-    font-size: 1.1em;
+    font-size: 1.05em;
 }
 
 .status-indicator {
@@ -67,30 +70,38 @@ body {
     background: #27ae60;
 }
 
+.status-dot.stopped {
+    background: #f39c12;
+}
+
 .status-dot.error {
     background: #e74c3c;
 }
 
+.status-text {
+    font-weight: 600;
+}
+
 @keyframes pulse {
     0% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.6; }
     100% { opacity: 1; }
 }
 
-/* Dashboard Grid */
+/* -------------------- DASHBOARD GRID -------------------- */
 .dashboard {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: 20px;
-    margin-bottom: 20px;
 }
 
+/* -------------------- CARD -------------------- */
 .card {
     background: rgba(255, 255, 255, 0.95);
     padding: 25px;
     border-radius: 15px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -107,7 +118,7 @@ body {
     color: #3498db;
 }
 
-/* Control Panel */
+/* -------------------- CONTROL PANEL -------------------- */
 .control-panel {
     grid-column: span 2;
 }
@@ -184,28 +195,28 @@ body {
     border-radius: 6px;
     background: white;
     font-size: 0.9em;
-    min-width: 300px;
+    min-width: 250px;
 }
 
-/* Statistics */
+/* -------------------- STATISTICS -------------------- */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 15px;
 }
 
 .stat-item {
     text-align: center;
     padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 10px;
     color: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .stat-value {
     font-size: 2em;
     font-weight: bold;
-    margin-bottom: 5px;
 }
 
 .stat-label {
@@ -213,93 +224,66 @@ body {
     opacity: 0.9;
 }
 
-/* Threat Chart */
-.threat-chart {
-    min-height: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* -------------------- THREAT CHART -------------------- */
+.threat-card canvas {
+    width: 100% !important;
+    height: 200px !important;
 }
 
-.threat-bars {
+canvas {
+    transition: all 0.3s ease-in-out;
+}
+
+/* -------------------- ALERTS TABLE -------------------- */
+.alerts-table {
     width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
 }
 
-.threat-bar {
-    margin-bottom: 10px;
+.alerts-table th, .alerts-table td {
+    border-bottom: 1px solid #ecf0f1;
+    padding: 10px;
+    text-align: center;
 }
 
-.threat-label {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-    font-weight: 600;
-}
-
-.threat-bar-inner {
-    height: 20px;
+.alerts-table th {
     background: #ecf0f1;
-    border-radius: 10px;
-    overflow: hidden;
+    color: #2c3e50;
+    font-weight: 700;
 }
 
-.threat-fill {
-    height: 100%;
-    border-radius: 10px;
-    transition: width 0.5s ease;
+.alerts-table tr:nth-child(even) {
+    background: #f8f9fa;
 }
 
-.threat-fill.normal {
-    background: #27ae60;
+.alerts-table tr:hover {
+    background: #f1f2f6;
 }
 
-.threat-fill.anomalous {
-    background: #e74c3c;
-}
-
-/* Alerts */
-.alerts-list {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.alert-item {
-    padding: 12px;
-    margin-bottom: 10px;
-    border-radius: 8px;
-    border-left: 4px solid #e74c3c;
-    background: #fff5f5;
-}
-
-.alert-item.normal {
-    border-left-color: #27ae60;
-    background: #f0fff4;
-}
-
-.alert-time {
-    font-size: 0.8em;
-    color: #7f8c8d;
-    margin-bottom: 5px;
-}
-
-.alert-message {
-    font-weight: 600;
+.alerts-table td {
     color: #2c3e50;
 }
 
-.no-alerts {
-    text-align: center;
-    color: #7f8c8d;
-    font-style: italic;
-    padding: 20px;
+.alerts-table td:nth-child(4) {
+    font-weight: 700;
 }
 
-/* Capture Log */
+.alerts-table td:nth-child(4):contains("Critical") {
+    color: #e74c3c;
+}
+
+.alerts-table td:nth-child(4):contains("High") {
+    color: #e67e22;
+}
+
+/* -------------------- CAPTURE LOG -------------------- */
 .capture-log {
-    max-height: 300px;
+    max-height: 250px;
     overflow-y: auto;
-    background: #f8f9fa;
-    border-radius: 8px;
+    background: #1e272e;
+    color: #ecf0f1;
+    border-radius: 10px;
     padding: 15px;
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
@@ -307,31 +291,15 @@ body {
 
 .log-entry {
     padding: 5px 0;
-    border-bottom: 1px solid #e9ecef;
-    color: #2c3e50;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.log-entry:last-child {
-    border-bottom: none;
-}
+.log-entry.info { color: #3498db; }
+.log-entry.success { color: #2ecc71; }
+.log-entry.error { color: #e74c3c; }
+.log-entry.warn { color: #f39c12; }
 
-.log-entry.info {
-    color: #3498db;
-}
-
-.log-entry.success {
-    color: #27ae60;
-}
-
-.log-entry.warning {
-    color: #f39c12;
-}
-
-.log-entry.error {
-    color: #e74c3c;
-}
-
-/* System Information */
+/* -------------------- MODEL INFO & SYSTEM INFO -------------------- */
 .info-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -341,47 +309,48 @@ body {
 .info-item {
     display: flex;
     justify-content: space-between;
-    padding: 10px;
+    padding: 10px 14px;
     background: #f8f9fa;
-    border-radius: 6px;
+    border-radius: 8px;
+    font-size: 0.95em;
 }
 
-.info-label {
+.info-item span:first-child {
     font-weight: 600;
     color: #2c3e50;
 }
 
-.info-value {
+.info-item span:last-child {
     color: #7f8c8d;
 }
 
-/* Responsive Design */
+/* -------------------- RESPONSIVE DESIGN -------------------- */
 @media (max-width: 768px) {
     .dashboard {
         grid-template-columns: 1fr;
     }
-    
+
     .control-panel {
         grid-column: span 1;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .info-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .control-buttons {
         flex-direction: column;
     }
-    
+
     .interface-selector {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .interface-selector select {
         min-width: 100%;
     }

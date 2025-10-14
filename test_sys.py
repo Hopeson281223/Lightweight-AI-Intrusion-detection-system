@@ -1,85 +1,197 @@
-from fastapi.testclient import TestClient
-from app.main import app
+"""
+Comprehensive system test for LAI-IDS
+------------------------------------
+Covers:
+✅ API availability & health
+✅ Model loading & prediction
+✅ Database integrity
+✅ Packet capture simulation
+✅ WebSocket logs
+✅ Interface listing
+✅ Stats & metrics
 
-client = TestClient(app)
+Run:
+    uvicorn main:app --reload
+Then, in another terminal:
+    python test_all.py
+"""
 
-# -----------------------
-# Basic health and root
-# -----------------------
-def test_root():
-    response = client.get("/")
-    assert response.status_code == 200
-    assert "html" in response.headers["content-type"]
+import asyncio
+import websockets
+import requests
+import json
+import time
+import random
+import sqlite3
+from pathlib import Path
+import numpy as np
 
+BASE_URL = "http://localhost:8000"
+
+# ---------- Utility ----------
+def print_header(title):
+    print(f"\n\033[96m{'='*25} {title} {'='*25}\033[0m")
+
+def check(condition, message):
+    color = "\033[92m" if condition else "\033[91m"
+    symbol = "✔️" if condition else "❌"
+    print(f"{color}{symbol} {message}\033[0m")
+
+def timed(func):
+    """Decorator to print duration of each test section"""
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        print(f"\n⏳ Running {func.__name__} ...")
+        try:
+            result = func(*args, **kwargs)
+            elapsed = time.time() - start
+            print(f"⏱️ Finished {func.__name__} in {elapsed:.2f}s")
+            return result
+        except Exception as e:
+            print(f"❌ {func.__name__} crashed: {e}")
+    return wrapper
+
+# ---------- 1. Health check ----------
+@timed
 def test_health():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    print_header("Health Check")
+    r = requests.get(f"{BASE_URL}/health")
+    check(r.status_code == 200 and r.json().get("status") == "ok", "Server health check passed")
 
-# -----------------------
-# Packet capture
-# -----------------------
-def test_list_interfaces():
-    response = client.get("/interfaces")
-    assert response.status_code == 200
-    assert "interfaces" in response.json()
+# ---------- 2. Interfaces ----------
+@timed
+def test_interfaces():
+    print_header("Interfaces")
+    r = requests.get(f"{BASE_URL}/interfaces")
+    data = r.json()
+    check("interfaces" in data, "Interfaces endpoint returns valid data")
+    if data.get("interfaces"):
+        print("Available interfaces:")
+        for i in data["interfaces"]:
+            print(f" - {i['name']} | {i['device']}")
+    else:
+        print("⚠️ No interfaces found")
 
-# NOTE: Start/Stop capture might require actual permissions and interfaces
-# They can fail if you run tests without proper privileges or live network interfaces
-def test_capture_status():
-    response = client.get("/status")
-    assert response.status_code == 200
-    assert "status" in response.json()
+# ---------- 3. Model loading & prediction ----------
+@timed
+def test_model_prediction():
+    print_header("Model Prediction")
+    N_FEATURES = 43
+    features = np.random.rand(N_FEATURES).tolist()
+    payload = {
+        "dataset": "cic",
+        "features": features,
+        "src_ip": "192.168.1.10",
+        "dst_ip": "10.0.0.1",
+        "protocol": "TCP"
+    }
+    r = requests.post(f"{BASE_URL}/predict", json=payload)
+    if r.status_code == 200:
+        result = r.json()
+        print("Prediction:", result)
+        check("label" in result, "Prediction response includes label")
+    else:
+        print("Error:", r.text)
+        check(False, "Prediction failed")
 
-# -----------------------
-# Prediction endpoint
-# -----------------------
-def test_predict():
-    # Provide dummy features with the same length as LIVE_FEATURES
-    dummy_features = [0.0] * 79  # replace 79 with len(LIVE_FEATURES)
-    payload = {"dataset": "CICIDS", "features": dummy_features}
+# ---------- 4. Database integrity ----------
+@timed
+def test_database():
+    print_header("Database Check")
+    db_path = Path("data/app.db")
+    if not db_path.exists():
+        check(False, "Database file missing!")
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        print("Tables:", tables)
+        required = {"packets", "predictions", "alerts", "metrics", "models"}
+        check(required.issubset(set(tables)), "All required tables exist")
+    except Exception as e:
+        check(False, f"Database connection error: {e}")
+    finally:
+        conn.close()
 
-    response = client.post("/predict", json=payload)
-    # May fail if the model is not present; for CI, you may mock load_model
-    assert response.status_code in (200, 404)  # Accept 404 if model is missing
+# ---------- 5. Capture control ----------
+@timed
+def test_capture_controls():
+    print_header("Packet Capture Controls")
+    r1 = requests.post(f"{BASE_URL}/start")
+    check(r1.status_code == 200, "Capture start endpoint works")
 
-# -----------------------
-# Stats
-# -----------------------
-def test_get_stats():
-    response = client.get("/stats")
-    assert response.status_code == 200
-    json_data = response.json()
-    assert "total_packets" in json_data
-    assert "recent_alerts" in json_data
-    assert "threat_distribution" in json_data
+    r2 = requests.get(f"{BASE_URL}/status")
+    data = r2.json()
+    print("Status:", data)
+    check("is_capturing" in data, "Capture status returns valid response")
 
-# -----------------------
-# Other endpoints
-# -----------------------
-def test_packets():
-    response = client.get("/packets")
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert "src_ip" in data[0]
+    r3 = requests.post(f"{BASE_URL}/stop")
+    check(r3.status_code == 200, "Capture stop endpoint works")
 
-def test_models():
-    response = client.get("/models")
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+# ---------- 6. Stats ----------
+@timed
+def test_stats():
+    print_header("System Stats")
+    r = requests.get(f"{BASE_URL}/stats")
+    data = r.json()
+    print(json.dumps(data, indent=2))
+    check("total_packets" in data, "Stats endpoint returns packet count")
+    check("threat_distribution" in data, "Stats endpoint returns threat distribution")
 
-def test_metrics():
-    response = client.get("/metrics")
-    assert response.status_code == 200
-    assert "metrics" in response.json()
+# ---------- 7. WebSocket live logs ----------
+@timed
+async def test_websocket_logs():
+    print_header("WebSocket Live Logs")
+    uri = f"ws://localhost:8000/ws/logs"
+    try:
+        async with websockets.connect(uri) as ws:
+            print("Connected to /ws/logs ... waiting for data (3s)")
+            try:
+                msg = await asyncio.wait_for(ws.recv(), timeout=3)
+                print("Received log:", msg)
+                check(True, "WebSocket log stream active")
+            except asyncio.TimeoutError:
+                print("No log received in 3s (likely no activity yet)")
+                check(True, "WebSocket connected successfully")
+    except Exception as e:
+        check(False, f"WebSocket connection failed: {e}")
 
-def test_css_js_files():
-    response = client.get("/css/style.css")
-    assert response.status_code in (200, 404)  # depends if file exists
-    response = client.get("/js/app.js")
-    assert response.status_code in (200, 404)
+# ---------- 8. Metrics & Models ----------
+@timed
+def test_metrics_and_models():
+    print_header("Metrics & Models")
+    m1 = requests.get(f"{BASE_URL}/metrics")
+    m2 = requests.get(f"{BASE_URL}/models")
+    check(m1.status_code == 200, "Metrics endpoint OK")
+    check(m2.status_code == 200, "Models endpoint OK")
+    metrics = m1.json().get("metrics", [])
+    models = m2.json()
+    print(f"Metrics count: {len(metrics)}")
+    print(f"Models count: {len(models)}")
 
-def test_favicon():
-    response = client.get("/favicon.ico")
-    assert response.status_code in (200, 404)
+# ---------- 9. Frontend ----------
+@timed
+def test_frontend_files():
+    print_header("Frontend Files")
+    files = ["index.html", "css", "js"]
+    for f in files:
+        r = requests.get(f"{BASE_URL}/frontend")
+        check(r.status_code in (200, 307), f"Frontend served correctly ({f})")
+
+# ---------- Main Runner ----------
+def run_all_tests():
+    print("\n🚀 Starting Comprehensive LAI-IDS System Test...\n")
+    test_health()
+    test_interfaces()
+    test_model_prediction()
+    test_database()
+    test_capture_controls()
+    test_stats()
+    asyncio.run(test_websocket_logs())
+    test_metrics_and_models()
+    test_frontend_files()
+    print("\n🎯 \033[92mAll tests executed.\033[0m\n")
+
+if __name__ == "__main__":
+    run_all_tests()

@@ -5,6 +5,7 @@ from scapy.all import sniff, IP, TCP, UDP
 from scapy.packet import Packet
 import requests
 import json
+import platform
 from datetime import datetime
 import numpy as np
 import sqlite3
@@ -36,21 +37,57 @@ class LivePacketCapture:
         self.MAX_FLOW_AGE = 5  # seconds
 
     def list_available_interfaces(self):
-        """List available network interfaces"""
+        """Return all usable network interfaces (including loopback if active)."""
         try:
-            from scapy.all import get_windows_if_list
-            interfaces = get_windows_if_list()
-            return [iface['name'] for iface in interfaces]
+            from scapy.arch.windows import get_windows_if_list
+            import psutil  # For checking active interface
+            win_ifs = get_windows_if_list()
+            interfaces = []
+
+            # Get active NICs from psutil (with traffic)
+            active_ifaces = set()
+            for name, addrs in psutil.net_if_addrs().items():
+                stats = psutil.net_if_stats().get(name)
+                if stats and stats.isup:
+                    active_ifaces.add(name)
+
+            for iface in win_ifs:
+                desc = iface.get("description", "").lower()
+                name = iface.get("name", "Unknown")
+
+                # Exclude only truly virtual drivers
+                if any(bad in desc for bad in ["filter", "scheduler", "miniport", "direct", "virtualbox", "vmware"]):
+                    continue
+
+                # Mark as active if it's currently in use
+                is_active = name in active_ifaces
+
+                interfaces.append({
+                    "name": name,
+                    "description": iface.get("description", ""),
+                    "device": f"\\Device\\NPF_{iface.get('guid', '')}",
+                    "active": is_active
+                })
+
+            if not interfaces:
+                interfaces = [{"name": "No valid interfaces found", "device": "none", "active": False}]
+
+            # Sort so active interfaces appear first
+            interfaces.sort(key=lambda x: not x["active"])
+            return interfaces
+
         except Exception as e:
-            print(f"Error listing interfaces: {e}")
-            return [self.current_interface]
-        
+            print(f"Interface listing error: {e}")
+            return [{"name": "Error listing interfaces", "device": "none", "active": False}]
+
     def set_interface(self, interface_name):
         if not self.is_capturing:
             self.current_interface = interface_name
             print(f"Interface set to: {interface_name}")
             return True
+        self.last_error = "Cannot change interface while capturing"
         return False
+
     
     def extract_flow_features(self, flow, dst_port):
         """Extract features from completed flow"""
@@ -110,24 +147,23 @@ class LivePacketCapture:
         
         # Then processes and deletes them
         for key, flow_data in to_delete:
-            # Checks if key still exists
             if key not in self.flows:
                 continue
-                
+
             features = self.extract_flow_features(flow_data, key[3])
             src, dst = key[0], key[1]
-            
+
             if features:
                 print(f"Flow completed: {src} -> {dst}:{key[3]} (Packets: {len(flow_data['timestamps'])})")
-                
+
                 # Save to database
                 packet_id = self.save_flow_to_database(key, flow_data, features)
                 if packet_id:
-                    self.send_prediction(features, packet_id)
-            
-            # Safe deletion - checks if key still exists
+                    self.send_prediction(features, packet_id, key)
+
             if key in self.flows:
                 del self.flows[key]
+
     
     def save_flow_to_database(self, flow_key, flow_data, features):
         """Save flow to database using your existing db connection"""
@@ -159,12 +195,19 @@ class LivePacketCapture:
             print(f"Database error: {e}")
             return None
     
-    def send_prediction(self, features, packet_id):
+    def send_prediction(self, features, packet_id, flow_key):
         """Send features for ML prediction"""
         try:
+            src_ip, dst_ip, src_port, dst_port, protocol = flow_key
             response = requests.post(
                 self.model_endpoint,
-                json={"dataset": "cic", "features": features},
+                json={
+                    "dataset": "cic",
+                    "features": features,
+                    "src_ip": src_ip,
+                    "dst_ip": dst_ip,
+                    "protocol": protocol
+                },
                 timeout=3
             )
             if response.status_code == 200:
@@ -189,7 +232,7 @@ class LivePacketCapture:
                 conn.commit()
                 conn.close()
                 
-                print(f"{result['label']} (conf: {result['confidence']:.2f})")
+                print(f"{src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f})")
                 
         except Exception as e:
             print(f"Prediction error: {e}")
@@ -259,21 +302,33 @@ class LivePacketCapture:
         if self.is_capturing:
             self.last_error = "Capture already running"
             return False
-            
-        if interface:
+
+        # Auto-select first active interface if none provided
+        if not interface or interface == "auto":
+            interfaces = self.list_available_interfaces()
+            active_ifs = [i for i in interfaces if i.get("active")]
+            if active_ifs:
+                self.current_interface = active_ifs[0]["device"]
+                print(f"Auto-selected active interface: {active_ifs[0]['name']}")
+            else:
+                self.last_error = "No active interface found"
+                print("❌ No active interface found for capture.")
+                return False
+        else:
             self.current_interface = interface
-            
+
         self.is_capturing = True
         self.packet_count = 0
         self.flows.clear()
         self.last_error = None
-        
-        self.capture_thread = threading.Thread(target=self._capture_loop)
-        self.capture_thread.daemon = True
+
+        # Launch capture in background thread
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.capture_thread.start()
-        
-        print("Flow-based packet capture started!")
+
+        print(f"✅ Flow-based packet capture started on {self.current_interface}")
         return True
+
     
     def stop_capture(self):
         if not self.is_capturing:
