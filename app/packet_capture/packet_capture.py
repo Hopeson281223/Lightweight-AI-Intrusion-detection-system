@@ -10,7 +10,7 @@ from datetime import datetime
 import numpy as np
 import sqlite3
 from app.ml.preprocess import LIVE_FEATURES
-from app.storage.db import get_db  
+from app.storage.db import get_db, create_session, end_session  
 
 class LivePacketCapture:
     def __init__(self, model_endpoint="http://localhost:8000/predict"):
@@ -20,6 +20,17 @@ class LivePacketCapture:
         self.packet_count = 0
         self.current_interface = r"\Device\NPF_{662136C5-DAF0-45FA-AFF8-1889200C99C2}"
         self.last_error = None
+
+        # === ADD SESSION TRACKING ===
+        self.session_id = None
+        self.session_start_time = None
+        self.prediction_count = 0
+        self.alert_count = 0
+        # ============================
+
+        # === ADD LIVE LOGS TRACKING ===
+        self.session_logs = []  # Store all logs for current session
+        # ==============================
         
         # Flow tracking
         self.flows = defaultdict(lambda: {
@@ -87,8 +98,7 @@ class LivePacketCapture:
             return True
         self.last_error = "Cannot change interface while capturing"
         return False
-
-    
+   
     def extract_flow_features(self, flow, dst_port):
         """Extract features from completed flow"""
         try:
@@ -163,17 +173,17 @@ class LivePacketCapture:
 
             if key in self.flows:
                 del self.flows[key]
-
-    
+ 
     def save_flow_to_database(self, flow_key, flow_data, features):
         """Save flow to database using your existing db connection"""
         try:
             conn = get_db()
             cursor = conn.cursor()
             
+            # === ADD SESSION_ID TO QUERY ===
             cursor.execute("""
-                INSERT INTO packets (ts, src_ip, dst_ip, src_port, dst_port, protocol, length, features_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO packets (ts, src_ip, dst_ip, src_port, dst_port, protocol, length, features_json, session_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 datetime.now().isoformat(),
                 flow_key[0],  # src_ip
@@ -182,13 +192,14 @@ class LivePacketCapture:
                 flow_key[3],  # dst_port
                 flow_key[4],  # protocol
                 sum(flow_data["fwd_lengths"]) + sum(flow_data["bwd_lengths"]),  # total length
-                json.dumps(features)
+                json.dumps(features),
+                self.session_id  # Add session_id
             ))
             packet_id = cursor.lastrowid
             conn.commit()
             conn.close()
             
-            print(f"Saved flow as packet {packet_id}")
+            print(f"💾 Saved flow as packet {packet_id} in session {self.session_id}")
             return packet_id
             
         except Exception as e:
@@ -216,27 +227,46 @@ class LivePacketCapture:
                 # Save prediction
                 conn = get_db()
                 cursor = conn.cursor()
+                
+                # Use local time for prediction timestamp
+                local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute(
-                    "INSERT INTO predictions (packet_id, label, score) VALUES (?, ?, ?)",
-                    (packet_id, result["label"], result["confidence"])
+                    "INSERT INTO predictions (packet_id, label, score, session_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (packet_id, result["label"], result["confidence"], self.session_id, local_time)
                 )
+                prediction_id = cursor.lastrowid
+                self.prediction_count += 1
                 
                 # Create alert if anomalous
                 if result["label"] == "ANOMALOUS" and result["confidence"] > 0.7:
+                    # Use local time for alert timestamp
                     cursor.execute(
-                        "INSERT INTO alerts (prediction_id, severity, message) VALUES (?, ?, ?)",
-                        (cursor.lastrowid, "HIGH", f"Anomalous traffic (conf: {result['confidence']:.2f})")
+                        "INSERT INTO alerts (prediction_id, severity, message, session_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (prediction_id, "HIGH", f"Anomalous traffic from {src_ip} to {dst_ip} (conf: {result['confidence']:.2f})", self.session_id, local_time)
                     )
-                    print(f"ALERT: Anomalous traffic detected!")
+                    self.alert_count += 1
+                    print(f"🚨 ALERT: Anomalous traffic detected at {local_time}!")
                 
                 conn.commit()
                 conn.close()
                 
-                print(f"{src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f})")
+                # Add to session logs with local time
+                log_entry = {
+                    "timestamp": local_time,
+                    "src_ip": src_ip,
+                    "dst_ip": dst_ip,
+                    "protocol": protocol,
+                    "label": result["label"],
+                    "confidence": result["confidence"],
+                    "message": f"Prediction: {result['label']} (conf: {result['confidence']:.2f})"
+                }
+                self.session_logs.append(log_entry)
                 
+                print(f"🔮 {src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f})")
+                    
         except Exception as e:
             print(f"Prediction error: {e}")
-    
+                    
     def packet_handler(self, packet):
         """Process each packet and add to flows"""
         try:
@@ -297,7 +327,7 @@ class LivePacketCapture:
             )
         except Exception as e:
             print(f"Capture error: {e}")
-    
+
     def start_capture(self, interface=None):
         if self.is_capturing:
             self.last_error = "Capture already running"
@@ -317,6 +347,20 @@ class LivePacketCapture:
         else:
             self.current_interface = interface
 
+        # === CREATE NEW SESSION ===
+        self.session_id = f"session_{int(time.time())}_{self.packet_count}"
+        self.session_start_time = datetime.now().isoformat()
+        self.prediction_count = 0
+        self.alert_count = 0
+        self.session_logs = []  # Reset logs for new session
+        
+        # Create session in database WITH START TIME
+        if create_session(self.session_id, self.current_interface, self.session_start_time):
+            print(f"🎯 New capture session started: {self.session_id} at {self.session_start_time}")
+        else:
+            print("⚠️ Could not create session in database, but capture will continue")
+        # ==========================
+
         self.is_capturing = True
         self.packet_count = 0
         self.flows.clear()
@@ -328,7 +372,6 @@ class LivePacketCapture:
 
         print(f"✅ Flow-based packet capture started on {self.current_interface}")
         return True
-
     
     def stop_capture(self):
         if not self.is_capturing:
@@ -343,18 +386,45 @@ class LivePacketCapture:
         flows_count = len(self.flows)
         self.flows.clear()
         
+        # === END SESSION IN DATABASE ===
+        if self.session_id:
+            # Get all session logs before ending session
+            session_logs = self.session_logs.copy()
+            
+            # Make sure we import end_session if not already imported
+            from app.storage.db import end_session
+            
+            if end_session(self.session_id, self.packet_count, self.prediction_count, self.alert_count, session_logs):
+                print(f"💾 Session {self.session_id} saved to database with {len(session_logs)} logs")
+            else:
+                print("⚠️ Could not save session to database")
+            
+            # Reset session tracking
+            self.session_id = None
+            self.session_start_time = None
+            self.prediction_count = 0
+            self.alert_count = 0
+            self.session_logs = []  # Clear logs after session end
+        # ===============================
+        
         if self.capture_thread:
             self.capture_thread.join(timeout=2.0)
         
         print(f"Capture stopped. Total packets: {self.packet_count}, Flows cleared: {flows_count}")
         return True
-    
+
     def get_status(self):
         return {
             "is_capturing": self.is_capturing,
             "packets_captured": self.packet_count,
             "active_flows": len(self.flows),
-            "interface": self.current_interface
+            "interface": self.current_interface,
+            # === ADD SESSION INFO ===
+            "session_id": self.session_id,
+            "predictions_count": self.prediction_count,
+            "alerts_count": self.alert_count,
+            "logs_count": len(self.session_logs)  # Add logs count
+            # ========================
         }
 
 packet_capture = LivePacketCapture()

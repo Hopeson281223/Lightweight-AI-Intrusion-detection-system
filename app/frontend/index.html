@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAI-IDS - Lightweight AI Intrusion Detection System</title>
-    <link rel="stylesheet" href="/frontend/css/styles.css">
+    <link rel="stylesheet" href="/frontend/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+
+        <!-- ===== Header ===== -->
         <header class="header">
             <div class="header-content">
                 <h1><i class="fas fa-shield-alt"></i> LAI-IDS</h1>
@@ -23,98 +24,204 @@
             </div>
         </header>
 
-        <!-- Dashboard -->
-        <div class="dashboard">
+        <!-- ===== Capture Control ===== -->
+        <section class="card control-panel">
+            <h2><i class="fas fa-play-circle"></i> Capture Control</h2>
+            <div class="control-buttons">
+                <button id="startBtn" class="btn btn-success"><i class="fas fa-play"></i> Start</button>
+                <button id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Stop</button>
+                <button id="refreshBtn" class="btn btn-info"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="interface-selector">
+                <label for="interfaceSelect">Network Interface:</label>
+                <select id="interfaceSelect"><option>Loading...</option></select>
+            </div>
+        </section>
 
-            <!-- Control Panel -->
-            <div class="card control-panel">
-                <h2><i class="fas fa-play-circle"></i> Capture Control</h2>
-                <div class="control-buttons">
-                    <button id="startBtn" class="btn btn-success"><i class="fas fa-play"></i> Start</button>
-                    <button id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Stop</button>
-                    <button id="refreshBtn" class="btn btn-info"><i class="fas fa-sync-alt"></i> Refresh</button>
-                </div>
-                <div class="interface-selector">
-                    <label for="interfaceSelect">Network Interface:</label>
-                    <select id="interfaceSelect"><option>Loading...</option></select>
+        <!-- ===== Navigation Tabs ===== -->
+        <nav class="navbar">
+            <div class="navbar-top">
+                <div class="navbar-left">
+                    <button class="hamburger" id="hamburger">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <span class="nav-title">Dashboard</span>
                 </div>
             </div>
 
-            <!-- System Stats -->
-            <div class="card stats-card">
-                <h2><i class="fas fa-tachometer-alt"></i> System Stats</h2>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-value" id="packetsCaptured">0</div>
-                        <div class="stat-label">Packets Captured</div>
+            <div class="nav-links" id="navLinks">
+                <div class="nav-tabs-container">
+                    <button class="nav-tab active" data-tab="logsTab">
+                        <i class="fas fa-terminal"></i> Live Logs
+                    </button>
+                    <button class="nav-tab" data-tab="alertsTab">
+                        <i class="fas fa-bell"></i> Alerts 
+                        <span class="alert-badge" id="alertBadge">0</span>
+                    </button>
+                    <button class="nav-tab" data-tab="threatTab">
+                        <i class="fas fa-exclamation-triangle"></i> Threats
+                    </button>
+                    <button class="nav-tab" data-tab="statsTab">
+                        <i class="fas fa-tachometer-alt"></i> Stats
+                    </button>
+                    <button class="nav-tab" data-tab="reportsTab">
+                        <i class="fas fa-file-alt"></i> Reports
+                    </button>
+                    <button class="nav-tab" data-tab="modelTab">
+                        <i class="fas fa-robot"></i> Model Info
+                    </button>
+                    <button class="nav-tab" data-tab="systemTab">
+                        <i class="fas fa-info-circle"></i> System Info
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- ===== Tab Content Sections ===== -->
+        <div class="tab-content">
+
+            <!-- Live Logs Tab -->
+            <div class="tab-pane active" id="logsTab">
+                <div class="card log-card">
+                    <h2><i class="fas fa-terminal"></i> Live Logs</h2>
+                    <div id="captureLog" class="capture-log">
+                        <div class="log-entry">System initializing...</div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="activeFlows">0</div>
-                        <div class="stat-label">Active Flows</div>
+                </div>
+            </div>
+
+            <!-- Alerts Tab -->
+            <div class="tab-pane" id="alertsTab">
+                <div class="card alerts-card">
+                    <h2><i class="fas fa-bell"></i> Alerts</h2>
+                    <table class="alerts-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Label</th>
+                                <th>Confidence</th>
+                                <th>Severity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alertsBody">
+                            <tr><td colspan="4" style="text-align:center;">No alerts detected</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Threat Visualization Tab -->
+            <div class="tab-pane" id="threatTab">
+                <div class="card threat-card">
+                    <h2><i class="fas fa-exclamation-triangle"></i> Threat Visualization</h2>
+                    <canvas id="threatChart" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- System Stats Tab -->
+            <div class="tab-pane" id="statsTab">
+                <div class="card stats-card">
+                    <h2><i class="fas fa-tachometer-alt"></i> System Stats</h2>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="packetsCaptured">0</div>
+                            <div class="stat-label">Packets Captured</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="activeFlows">0</div>
+                            <div class="stat-label">Active Flows</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="systemUptime">--</div>
+                            <div class="stat-label">Uptime</div>
+                        </div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="systemUptime">--</div>
-                        <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div class="tab-pane" id="reportsTab">
+                <div class="card reports-card">
+                    <h2><i class="fas fa-file-alt"></i> Reports</h2>
+                    <p>View and download system detection reports.</p>
+
+                    <!-- ===== Report Actions ===== -->
+                    <div class="reports-actions">
+                        <button id="refreshReportsBtn" class="btn btn-secondary">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+
+                    <!-- ===== Filter/Search Bar ===== -->
+                    <div class="report-filters">
+                        <input type="text" id="reportSearch" placeholder="Search reports..." class="input">
+                        <select id="reportTypeFilter">
+                            <option value="all">All Types</option>
+                            <option value="alert">Alert Summary</option>
+                            <option value="system">System Stats</option>
+                            <option value="threat">Threat Analysis</option>
+                        </select>
+                    </div>
+
+                    <!-- ===== Reports Table ===== -->
+                    <div class="reports-content">
+                        <table class="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Type</th>
+                                    <th>Detected Threats</th>
+                                    <th>File</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportsBody">
+                                <tr><td colspan="5" style="text-align:center;">No reports found.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- ===== Summary Section ===== -->
+                    <div class="report-summary">
+                        <h3><i class="fas fa-chart-bar"></i> Recent Summary</h3>
+                        <canvas id="reportChart" height="120"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Threat Visualization -->
-            <div class="card threat-card">
-                <h2><i class="fas fa-exclamation-triangle"></i> Threat Visualization</h2>
-                <canvas id="threatChart" height="150"></canvas>
-            </div>
-
-            <!-- Live Logs -->
-            <div class="card log-card">
-                <h2><i class="fas fa-terminal"></i> Live AI Logs</h2>
-                <div id="captureLog" class="capture-log">
-                    <div class="log-entry">System initializing...</div>
+            <!-- Model Info Tab -->
+            <div class="tab-pane" id="modelTab">
+                <div class="card model-card">
+                    <h2><i class="fas fa-robot"></i> Model Info</h2>
+                    <div class="info-grid">
+                        <div class="info-item"><span>Model:</span> <span id="mlModel">--</span></div>
+                        <div class="info-item"><span>Dataset:</span> <span id="datasetName">--</span></div>
+                        <div class="info-item"><span>Accuracy:</span> <span id="modelAccuracy">--</span></div>
+                        <div class="info-item"><span>Size (KB):</span> <span id="modelSize">--</span></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Alerts -->
-            <div class="card alerts-card">
-                <h2><i class="fas fa-bell"></i> Alerts</h2>
-                <table class="alerts-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Label</th>
-                            <th>Confidence</th>
-                            <th>Severity</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alertsBody">
-                        <tr><td colspan="4" style="text-align:center;">No alerts detected</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Model Info -->
-            <div class="card model-card">
-                <h2><i class="fas fa-robot"></i> Model Info</h2>
-                <div class="info-grid">
-                    <div class="info-item"><span>Model:</span> <span id="mlModel">--</span></div>
-                    <div class="info-item"><span>Dataset:</span> <span id="datasetName">--</span></div>
-                    <div class="info-item"><span>Accuracy:</span> <span id="modelAccuracy">--</span></div>
-                    <div class="info-item"><span>Size (KB):</span> <span id="modelSize">--</span></div>
+            <!-- System Info Tab -->
+            <div class="tab-pane" id="systemTab">
+                <div class="card info-card">
+                    <h2><i class="fas fa-info-circle"></i> System Info</h2>
+                    <div class="info-grid">
+                        <div class="info-item"><span>Status:</span> <span id="captureStatus">Stopped</span></div>
+                        <div class="info-item"><span>Interface:</span> <span id="currentInterface">--</span></div>
+                        <div class="info-item"><span>Health:</span> <span id="systemHealth">--</span></div>
+                        <div class="info-item"><span>CPU Usage:</span> <span id="cpuUsage">--%</span></div>
+                        <div class="info-item"><span>Memory Usage:</span> <span id="memUsage">--%</span></div>
+                        <div class="info-item"><span>System Uptime:</span> <span id="uptime">--:--:--</span></div>
+                        <div class="info-item"><span>Version:</span> <span id="systemVersion">0.1.0</span></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- System Info -->
-            <div class="card info-card">
-                <h2><i class="fas fa-info-circle"></i> System Info</h2>
-                <div class="info-grid">
-                    <div class="info-item"><span>Status:</span> <span id="captureStatus">Stopped</span></div>
-                    <div class="info-item"><span>Interface:</span> <span id="currentInterface">--</span></div>
-                    <div class="info-item"><span>Health:</span> <span id="systemHealth">--</span></div>
-                    <div class="info-item"><span>Version:</span> <span id="systemVersion">0.1.0</span></div>
-                </div>
-            </div>
+
         </div>
     </div>
 
-    <script src="/frontend/js/app.js"></script>
+    <script src="/frontend/app.js"></script>
 </body>
 </html>

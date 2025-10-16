@@ -17,6 +17,9 @@ pip install -r requirements.txt
 # Initialize database
 python scripts/setup_db.py
 
+# Train model
+python -m app.ml.train_model
+
 # Run API
 uvicorn app.main:app --reload
 # Open: http://127.0.0.1:8000/docs

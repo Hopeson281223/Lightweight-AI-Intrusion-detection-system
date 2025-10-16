@@ -1,19 +1,21 @@
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 from pydantic import BaseModel
 from pathlib import Path
 from app.packet_capture.packet_capture import packet_capture
 from datetime import datetime
 from collections import deque
+import io
 import json
 import joblib
 import numpy as np
-
 import asyncio
-
-from app.storage.db import init_db, get_db
+from app.storage.db import init_db, get_db, get_current_session_stats, get_recent_sessions
 from app.ml.preprocess import LIVE_FEATURES, pd
 
 # Directories
@@ -135,46 +137,79 @@ def set_interface(interface_name: str):
 # stats
 @app.get("/stats")
 def get_stats():
-    """Get system statistics"""
-    conn = get_db()
+    """Get system statistics - SESSION BASED"""
     try:
-        cur = conn.cursor()
-        
-        # Total packets
-        cur.execute("SELECT COUNT(*) FROM packets")
-        total_packets = cur.fetchone()[0] or 0
-        
-        # Recent alerts (last hour)
-        cur.execute("SELECT COUNT(*) FROM alerts WHERE created_at > datetime('now', '-1 hour')")
-        recent_alerts_result = cur.fetchone()
-        recent_alerts = recent_alerts_result[0] if recent_alerts_result else 0
-        
-        # Threat distribution
-        cur.execute("SELECT label, COUNT(*) FROM predictions GROUP BY label")
-        threat_rows = cur.fetchall()
-        threat_distribution = {row[0]: row[1] for row in threat_rows} if threat_rows else {}
-        
-        # Capture status
-        from app.packet_capture import packet_capture
+        # Get current session info from packet capture
         capture_status = packet_capture.get_status()
+        current_session_id = capture_status.get("session_id")
         
-        return {
-            "total_packets": total_packets,
-            "recent_alerts": recent_alerts,
-            "threat_distribution": threat_distribution,
-            "capture_status": capture_status
-        }
+        # Use session-based stats if available
+        if current_session_id and capture_status.get("is_capturing"):
+            from app.storage.db import get_current_session_stats
+            session_stats = get_current_session_stats(current_session_id)
+            
+            return {
+                "threat_distribution": session_stats["threat_distribution"],
+                "recent_alerts": session_stats["recent_alerts"],
+                "capture_status": capture_status,
+                "session_id": current_session_id,
+                "session_based": True  # Flag to indicate session-based data
+            }
+        else:
+            # Fallback to recent session or all-time data
+            conn = get_db()
+            cur = conn.cursor()
+            
+            # Get most recent session's threat distribution
+            cur.execute("""
+                SELECT label, COUNT(*) as count 
+                FROM predictions 
+                WHERE session_id = (
+                    SELECT id FROM sessions 
+                    ORDER BY start_time DESC 
+                    LIMIT 1
+                )
+                GROUP BY label
+            """)
+            threat_rows = cur.fetchall()
+            threat_distribution = {row[0]: row[1] for row in threat_rows} if threat_rows else {}
+            
+            # Get recent alerts
+            cur.execute("""
+                SELECT a.severity, a.message, a.created_at, p.label 
+                FROM alerts a
+                JOIN predictions p ON a.prediction_id = p.id
+                ORDER BY a.created_at DESC 
+                LIMIT 10
+            """)
+            alert_rows = cur.fetchall()
+            recent_alerts = [
+                {
+                    "severity": row[0],
+                    "message": row[1], 
+                    "timestamp": row[2],
+                    "label": row[3]
+                }
+                for row in alert_rows
+            ]
+            
+            conn.close()
+            
+            return {
+                "threat_distribution": threat_distribution,
+                "recent_alerts": recent_alerts,
+                "capture_status": capture_status,
+                "session_based": False  # Flag to indicate fallback data
+            }
         
     except Exception as e:
         print(f"Error getting stats: {e}")
         return {
-            "total_packets": 0,
-            "recent_alerts": 0, 
             "threat_distribution": {},
+            "recent_alerts": [],
+            "capture_status": packet_capture.get_status(),
             "error": str(e)
         }
-    finally:
-        conn.close()
         
 # Prediction
 @app.post("/predict")
@@ -253,12 +288,46 @@ async def websocket_logs(websocket: WebSocket):
         while True:
             if live_logs:
                 log_entry = live_logs.popleft()
-                await websocket.send_text(log_entry)
+                
+                # Store log in current session (in packet_capture memory)
+                try:
+                    # Parse the log entry to get structured data
+                    log_data = json.loads(log_entry)
+                    
+                    # Create log entry with FULL datetime
+                    current_time = datetime.now()
+                    formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    packet_capture.session_logs.append({
+                        "timestamp": formatted_time,  # Full date and time
+                        "src_ip": log_data.get("src_ip", "N/A"),
+                        "dst_ip": log_data.get("dst_ip", "N/A"), 
+                        "protocol": log_data.get("protocol", "N/A"),
+                        "label": log_data.get("label", "UNKNOWN"),
+                        "confidence": log_data.get("confidence"),
+                        "message": log_data.get("message", log_entry)
+                    })
+                    print(f"📝 Added log to session: {formatted_time} - {log_data.get('label', 'UNKNOWN')}")
+                    
+                    # Also update the log entry to include date for WebSocket display
+                    log_data["timestamp"] = formatted_time
+                    await websocket.send_text(json.dumps(log_data))
+                    
+                except Exception as e:
+                    print(f"⚠️ Error adding log to session: {e}")
+                    # Still add raw log if JSON parsing fails
+                    current_time = datetime.now()
+                    formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    packet_capture.session_logs.append({
+                        "timestamp": formatted_time,
+                        "message": log_entry
+                    })
+                    await websocket.send_text(log_entry)
             await asyncio.sleep(0.5)
     except Exception as e:
         print(f"[WS] Connection closed: {e}")
 
-# Other endpoints
 @app.get("/packets")
 def get_packets():
     return [{"id": 1, "src_ip": "192.168.0.10", "dst_ip": "10.0.0.5", "protocol": "TCP"}]
@@ -284,17 +353,180 @@ def get_models():
         for r in rows
     ]
 
-# Serve CSS files from root
-@app.get("/css/{filename}")
-def get_css(filename: str):
-    return FileResponse(f"app/frontend/css/{filename}")
+# Session management endpoints
+@app.get("/sessions")
+def get_sessions(limit: int = 10):
+    """Get recent capture sessions"""
+    try:
+        from app.storage.db import get_recent_sessions
+        sessions = get_recent_sessions(limit)
+        return {"sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sessions: {e}")
 
-# Serve JS files from root  
-@app.get("/js/{filename}")
-def get_js(filename: str):
-    return FileResponse(f"app/frontend/js/{filename}")
+@app.get("/sessions/{session_id}")
+def get_session_details(session_id: str):
+    """Get detailed information for a specific session"""
+    try:
+        from app.storage.db import get_current_session_stats
+        session_stats = get_current_session_stats(session_id)
+        
+        if not session_stats["session_info"]:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        return {
+            "session_info": session_stats["session_info"],
+            "threat_distribution": session_stats["threat_distribution"],
+            "recent_alerts": session_stats["recent_alerts"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting session details: {e}")
+    
+@app.get("/reports")
+def list_reports():
+    """List all generated session reports"""
+    conn = get_db()
+    cur = conn.execute("""
+        SELECT r.id, r.session_id, r.title, r.created_at, s.start_time, s.end_time, s.interface
+        FROM reports r
+        LEFT JOIN sessions s ON r.session_id = s.id
+        ORDER BY r.created_at DESC
+    """)
+    reports = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return {"reports": reports}
 
-# Serve frontend assets
-@app.get("/favicon.ico")
-def get_favicon():
-    return FileResponse("app/frontend/favicon.ico")
+@app.get("/reports/{session_id}")
+def get_report_details(session_id: str):
+    """View JSON report data (summary)"""
+    conn = get_db()
+    cur = conn.execute("SELECT report_data FROM reports WHERE session_id = ?", (session_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    return json.loads(row["report_data"])
+
+
+@app.get("/reports/{session_id}/download")
+def download_report(session_id: str):
+    """Generate and return a PDF report for a specific session"""
+    conn = get_db()
+    cur = conn.execute("SELECT report_data FROM reports WHERE session_id = ?", (session_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    report_data = json.loads(row["report_data"])
+    session = report_data["session"]
+    predictions = report_data["predictions"]
+    alerts = report_data["alerts"]
+    live_logs = report_data.get("live_logs", [])  # Get live logs from report data
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title
+    elements.append(Paragraph(f"LAI-IDS Session Report: {session_id}", styles["Title"]))
+    elements.append(Spacer(1, 12))
+
+    # Session info
+    elements.append(Paragraph("<b>Session Information</b>", styles["Heading2"]))
+    info_data = [
+        ["Interface", session["interface"]],
+        ["Start Time", session["start_time"]],
+        ["End Time", session["end_time"]],
+        ["Total Packets", session["total_packets"]],
+        ["Total Predictions", session["total_predictions"]],
+        ["Total Alerts", session["total_alerts"]],
+    ]
+    info_table = Table(info_data, colWidths=[150, 350])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 12))
+
+    # Prediction Summary
+    elements.append(Paragraph("<b>Prediction Summary</b>", styles["Heading2"]))
+    pred_data = [["Label", "Count"]] + [[k, v] for k, v in predictions.items()]
+    pred_table = Table(pred_data, colWidths=[250, 250])
+    pred_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+    elements.append(pred_table)
+    elements.append(Spacer(1, 12))
+
+    # Alerts
+    elements.append(Paragraph("<b>Recent Alerts</b>", styles["Heading2"]))
+    if alerts:
+        alert_data = [["Severity", "Message", "Timestamp"]] + [
+            [a["severity"], a["message"], a["created_at"]] for a in alerts
+        ]
+        alert_table = Table(alert_data, colWidths=[100, 300, 100])
+        alert_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        elements.append(alert_table)
+    else:
+        elements.append(Paragraph("No alerts recorded for this session.", styles["Normal"]))
+    
+    elements.append(Spacer(1, 12))
+
+    # === ADD LIVE LOGS SECTION ===
+    elements.append(Paragraph("<b>Live Session Logs</b>", styles["Heading2"]))
+    
+    if live_logs:
+        # Show all logs in a readable format
+        log_data = [["Timestamp", "Source", "Destination", "Protocol", "Prediction", "Confidence"]]
+        
+        for log_entry in live_logs:
+            timestamp = log_entry.get("timestamp", "N/A")
+            src_ip = log_entry.get("src_ip", "N/A")
+            dst_ip = log_entry.get("dst_ip", "N/A")
+            protocol = log_entry.get("protocol", "N/A")
+            label = log_entry.get("label", "UNKNOWN")
+            confidence = log_entry.get("confidence")
+            
+            conf_text = f"{confidence:.2f}" if confidence else "N/A"
+            
+            log_data.append([timestamp, src_ip, dst_ip, protocol, label, conf_text])
+        
+        # Create live logs table
+        log_table = Table(log_data, colWidths=[60, 80, 80, 50, 60, 50])
+        log_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.whitesmoke]),
+        ]))
+        elements.append(log_table)
+        
+        elements.append(Paragraph(f"<i>Total log entries: {len(live_logs)}</i>", styles["Normal"]))
+    else:
+        elements.append(Paragraph("No live logs recorded for this session.", styles["Normal"]))
+    # ==============================
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    filename = f"LAI-IDS_Report_{session_id}.pdf"
+    
+    from fastapi import Response
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
