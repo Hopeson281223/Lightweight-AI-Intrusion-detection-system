@@ -48,49 +48,70 @@ class LivePacketCapture:
         self.MAX_FLOW_AGE = 5  # seconds
 
     def list_available_interfaces(self):
-        """Return all usable network interfaces (including loopback if active)."""
+        """Return all usable network interfaces with proper active status."""
         try:
             from scapy.arch.windows import get_windows_if_list
-            import psutil  # For checking active interface
+            import psutil
+            
             win_ifs = get_windows_if_list()
             interfaces = []
 
-            # Get active NICs from psutil (with traffic)
-            active_ifaces = set()
-            for name, addrs in psutil.net_if_addrs().items():
-                stats = psutil.net_if_stats().get(name)
-                if stats and stats.isup:
-                    active_ifaces.add(name)
-
+            # Get network I/O statistics to find truly active interfaces
+            net_io = psutil.net_io_counters(pernic=True)
+            
             for iface in win_ifs:
                 desc = iface.get("description", "").lower()
                 name = iface.get("name", "Unknown")
+                guid = iface.get("guid", "")
 
-                # Exclude only truly virtual drivers
-                if any(bad in desc for bad in ["filter", "scheduler", "miniport", "direct", "virtualbox", "vmware"]):
+                # Exclude virtual and filter drivers more precisely
+                exclude_keywords = ["filter", "scheduler", "miniport", "direct", "virtualbox", "vmware", "vpn", "tap"]
+                if any(bad in desc for bad in exclude_keywords):
                     continue
 
-                # Mark as active if it's currently in use
-                is_active = name in active_ifaces
+                # Check if interface is active (has recent traffic)
+                is_active = False
+                bytes_sent = 0
+                bytes_recv = 0
+                
+                try:
+                    if name in net_io:
+                        stats = net_io[name]
+                        bytes_sent = stats.bytes_sent
+                        bytes_recv = stats.bytes_recv
+                        # Consider interface active if it has any traffic or is the default route
+                        is_active = (bytes_sent > 0 or bytes_recv > 0)
+                except Exception:
+                    pass
+
+                # Also check if interface is up
+                try:
+                    iface_stats = psutil.net_if_stats().get(name)
+                    if iface_stats and iface_stats.isup:
+                        is_active = True  # Mark as active if interface is up
+                except Exception:
+                    pass
 
                 interfaces.append({
                     "name": name,
                     "description": iface.get("description", ""),
-                    "device": f"\\Device\\NPF_{iface.get('guid', '')}",
-                    "active": is_active
+                    "device": f"\\Device\\NPF_{guid}",
+                    "active": is_active,
+                    "bytes_sent": bytes_sent,
+                    "bytes_recv": bytes_recv
                 })
 
             if not interfaces:
                 interfaces = [{"name": "No valid interfaces found", "device": "none", "active": False}]
 
-            # Sort so active interfaces appear first
-            interfaces.sort(key=lambda x: not x["active"])
+            # Sort: active interfaces first, then by name
+            interfaces.sort(key=lambda x: (-x["active"], x["name"].lower()))
             return interfaces
 
         except Exception as e:
             print(f"Interface listing error: {e}")
             return [{"name": "Error listing interfaces", "device": "none", "active": False}]
-
+        
     def set_interface(self, interface_name):
         if not self.is_capturing:
             self.current_interface = interface_name
@@ -217,7 +238,8 @@ class LivePacketCapture:
                     "features": features,
                     "src_ip": src_ip,
                     "dst_ip": dst_ip,
-                    "protocol": protocol
+                    "protocol": protocol,
+                    "model_type": "random_forest"  # Use Random Forest for better accuracy
                 },
                 timeout=3
             )
@@ -258,15 +280,16 @@ class LivePacketCapture:
                     "protocol": protocol,
                     "label": result["label"],
                     "confidence": result["confidence"],
-                    "message": f"Prediction: {result['label']} (conf: {result['confidence']:.2f})"
+                    "message": f"Prediction: {result['label']} (conf: {result['confidence']:.2f})",
+                    "model_type": "random_forest"  # Add model type to logs
                 }
                 self.session_logs.append(log_entry)
                 
-                print(f"🔮 {src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f})")
+                print(f"🔮 {src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f}) [RF]")
                     
         except Exception as e:
             print(f"Prediction error: {e}")
-                    
+                            
     def packet_handler(self, packet):
         """Process each packet and add to flows"""
         try:

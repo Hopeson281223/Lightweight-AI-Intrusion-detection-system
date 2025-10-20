@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     FOREIGN KEY (session_id) REFERENCES sessions (id)
 );
 
--- Existing tables (keep these as they are)
+-- Existing tables
 CREATE TABLE IF NOT EXISTS metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
@@ -75,12 +75,14 @@ CREATE TABLE IF NOT EXISTS reports (
     FOREIGN KEY (session_id) REFERENCES sessions (id)
 );
 
+-- Models table with model_type support
 CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     dataset TEXT,
     path TEXT,
     size_kb REAL,
+    model_type TEXT DEFAULT 'decision_tree',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     feature_names_json TEXT,
     label_classes_json TEXT,
@@ -96,7 +98,6 @@ CREATE TABLE IF NOT EXISTS live_logs (
     FOREIGN KEY (session_id) REFERENCES sessions (id)
 );
 
-
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_packets_session ON packets(session_id);
 CREATE INDEX IF NOT EXISTS idx_live_logs_session ON live_logs(session_id);
@@ -105,6 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_session ON reports(session_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_session ON alerts(session_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_time ON sessions(start_time);
+CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);
 """
 
 def get_db():
@@ -398,17 +400,26 @@ def save_metrics(name, value):
     finally:
         conn.close()
 
-def save_model_info(name, dataset, path, size_kb, feature_names=None, label_classes=None):
-    """Save model metadata in DB (unchanged)"""
+def save_model_info(name, dataset, path, size_kb, feature_names=None, label_classes=None, model_type=None):
+    """Save model metadata in DB (updated to support model_type)"""
     conn = get_db()
     feature_names_json = json.dumps(feature_names) if feature_names else None
     label_classes_json = json.dumps(label_classes) if label_classes else None
+    
     try:
+        # Check if model_type column exists, if not add it
+        try:
+            conn.execute("ALTER TABLE models ADD COLUMN model_type TEXT")
+            print("✅ Added model_type column to models table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         conn.execute("""
-            INSERT INTO models (name, dataset, path, size_kb, feature_names_json, label_classes_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (name, dataset, str(path), size_kb, feature_names_json, label_classes_json))
+            INSERT INTO models (name, dataset, path, size_kb, feature_names_json, label_classes_json, model_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, dataset, str(path), size_kb, feature_names_json, label_classes_json, model_type))
         conn.commit()
+        print(f"✅ Model info saved: {name} ({model_type})")
     except Exception as e:
         print(f"Error saving model info: {e}")
     finally:

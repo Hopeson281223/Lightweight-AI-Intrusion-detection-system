@@ -21,6 +21,7 @@ class LAIIDSFrontend {
         this.loadModelInfo();
         this.startWebSocket();
         this.loadReports();
+        this.updateModelStatus();
 
         // Set up intervals
         setInterval(() => this.updateStats(), 4000);
@@ -630,6 +631,14 @@ class LAIIDSFrontend {
         document.getElementById('startBtn').addEventListener('click', () => this.startCapture());
         document.getElementById('stopBtn').addEventListener('click', () => this.stopCapture());
         document.getElementById('refreshBtn').addEventListener('click', () => this.updateStats());
+
+        document.getElementById('interfaceSelect').addEventListener('change', () => {
+            this.updateInterfaceStatus();
+        });
+
+        document.getElementById('modelSelect').addEventListener('change', () => {
+            this.updateModelStatus();
+        });
     }
 
     async apiCall(endpoint, method = 'GET', body = null) {
@@ -654,14 +663,41 @@ class LAIIDSFrontend {
             select.innerHTML = '';
 
             if (data.interfaces && data.interfaces.length > 0) {
+                let activeInterfaceFound = false;
+                let firstActiveInterface = null;
+
                 data.interfaces.forEach(iface => {
                     const opt = document.createElement('option');
                     opt.value = iface.device;
-                    opt.textContent = `${iface.name} — ${iface.description}`;
+                    
+                    // Add active indicator to the option text
+                    const activeIndicator = iface.active ? '🟢 ACTIVE - ' : '⚫ ';
+                    opt.textContent = `${activeIndicator}${iface.name} — ${iface.description}`;
+                    
+                    // Add data attribute for styling
+                    opt.dataset.active = iface.active;
+                    
                     select.appendChild(opt);
+
+                    // Track the first active interface for auto-selection
+                    if (iface.active && !firstActiveInterface) {
+                        firstActiveInterface = iface;
+                    }
                 });
-                select.value = data.interfaces[0].device;
-                document.getElementById('currentInterface').textContent = data.interfaces[0].name;
+
+                // Auto-select the first active interface, or first available
+                if (firstActiveInterface) {
+                    select.value = firstActiveInterface.device;
+                    activeInterfaceFound = true;
+                    this.showAutoSelectNotification(firstActiveInterface.name);
+                } else if (data.interfaces.length > 0) {
+                    // Fallback to first interface if no active ones found
+                    select.value = data.interfaces[0].device;
+                }
+
+                // Update interface status display
+                this.updateInterfaceStatus();
+                
             } else {
                 select.innerHTML = '<option disabled>No interfaces found</option>';
             }
@@ -671,8 +707,75 @@ class LAIIDSFrontend {
         }
     }
 
+    styleActiveInterfaces() {
+        const select = document.getElementById('interfaceSelect');
+        if (!select) return;
+
+        // Add CSS for styling active interfaces if not already added
+        if (!document.getElementById('interfaceStyles')) {
+            const style = document.createElement('style');
+            style.id = 'interfaceStyles';
+            style.textContent = `
+                .active-interface {
+                    background: linear-gradient(90deg, #e8f5e8 0%, #f0f8f0 100%) !important;
+                    border-left: 3px solid #27ae60 !important;
+                    font-weight: 600 !important;
+                }
+                .interface-active-badge {
+                    display: inline-block;
+                    width: 8px;
+                    height: 8px;
+                    background: #27ae60;
+                    border-radius: 50%;
+                    margin-right: 8px;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Apply styling to options
+        Array.from(select.options).forEach(option => {
+            if (option.dataset.active === 'true') {
+                option.classList.add('active-interface');
+            }
+        });
+    }
+
+    updateModelStatus() {
+        const statusElement = document.getElementById('modelStatus');
+        const select = document.getElementById('modelSelect');
+        
+        if (!statusElement || !select) return;
+        
+        const selectedModel = select.value;
+        const isAvailable = this.checkModelAvailability(selectedModel);
+        
+        statusElement.className = `model-status ${isAvailable ? 'active' : 'inactive'}`;
+        statusElement.innerHTML = `
+            <span class="status-dot ${isAvailable ? 'active' : 'inactive'}"></span>
+            <span class="status-text">${isAvailable ? 'AVAILABLE' : 'NOT FOUND'}</span>
+        `;
+        statusElement.style.display = 'flex';
+        
+        // Update description
+        const description = statusElement.querySelector('.model-description');
+        if (description) {
+            description.textContent = this.getModelDescription(selectedModel);
+        }
+    }
+
+    getModelDescription(modelType) {
+        const descriptions = {
+            'random_forest': '99.86% accuracy - Best for detection',
+            'decision_tree': 'Fast inference - Good for monitoring'
+        };
+        return descriptions[modelType] || 'Model information';
+    }
+
     async startCapture() {
         const iface = document.getElementById('interfaceSelect').value;
+        const modelType = document.getElementById('modelSelect').value;
+        
         if (!iface || iface.includes('Loading') || iface.includes('No interfaces')) {
             this.log("Please select a valid network interface", "error");
             return;
@@ -681,14 +784,15 @@ class LAIIDSFrontend {
         try {
             await this.apiCall(`/start?interface=${encodeURIComponent(iface)}`, 'POST');
             this.isCapturing = true;
-            this.log(`Started capturing on interface: ${iface}`, 'success');
+            this.log(`Started capturing on interface: ${iface} using ${modelType.toUpperCase()} model`, 'success');
             this.updateSystemStatus(true);
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
         } catch (err) {
-            this.log(`Failed to start capture: ${err.message}`, 'error');
+            this.log(`Failed to start capture: ${err.message}`, "error");
         }
     }
+
 
     async stopCapture() {
         try {
@@ -848,6 +952,33 @@ class LAIIDSFrontend {
         this.chart.update('active');
     }
 
+    updateInterfaceStatus(selectedInterface) {
+        const statusElement = document.getElementById('interfaceStatus');
+        const select = document.getElementById('interfaceSelect');
+        const currentInterfaceSpan = document.getElementById('currentInterface');
+        
+        if (!statusElement || !select || !currentInterfaceSpan) return;
+        
+        const selectedOption = select.selectedOptions[0];
+        if (selectedOption && selectedOption.value !== 'Loading...') {
+            const isActive = selectedOption.dataset.active === 'true';
+            
+            // Update status display
+            statusElement.className = `interface-status ${isActive ? 'active' : 'inactive'}`;
+            statusElement.innerHTML = `
+                <span class="status-dot ${isActive ? 'active' : 'inactive'}"></span>
+                <span class="status-text">${isActive ? 'ACTIVE' : 'INACTIVE'}</span>
+            `;
+            statusElement.style.display = 'flex';
+            
+            // Update current interface display
+            const interfaceName = selectedOption.textContent.replace(/[🟢⚫]/g, '').trim();
+            currentInterfaceSpan.textContent = interfaceName;
+            currentInterfaceSpan.style.color = isActive ? '#28a745' : '#dc3545';
+            currentInterfaceSpan.style.fontWeight = '700';
+        }
+    }
+
     startWebSocket() {
         try {
             const ws = new WebSocket(`ws://${window.location.host}/ws/logs`);
@@ -995,6 +1126,7 @@ class LAIIDSFrontend {
             text.textContent = 'Stopped';
         }
     }
+    
 }
 
 let app; // Make app global for testing

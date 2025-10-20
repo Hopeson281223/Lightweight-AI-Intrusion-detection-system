@@ -32,9 +32,35 @@
                 <button id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Stop</button>
                 <button id="refreshBtn" class="btn btn-info"><i class="fas fa-sync-alt"></i> Refresh</button>
             </div>
+            <!-- In your index.html, enhance the interface selector section -->
             <div class="interface-selector">
                 <label for="interfaceSelect">Network Interface:</label>
-                <select id="interfaceSelect"><option>Loading...</option></select>
+                <select id="interfaceSelect">
+                    <option>Loading interfaces...</option>
+                </select>
+                <div id="interfaceStatus" class="interface-status" style="display: none;">
+                    <span class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text"></span>
+                    </span>
+                    <span class="interface-description"></span>
+                </div>
+            </div>
+
+            <!-- ===== ADD MODEL SELECTOR ===== -->
+            <div class="model-selector">
+                <label for="modelSelect">Detection Model:</label>
+                <select id="modelSelect">
+                    <option value="random_forest">🟢 Random Forest (Higher Accuracy)</option>
+                    <option value="decision_tree">⚡ Decision Tree (Fast)</option>
+                </select>
+                <div id="modelStatus" class="model-status" style="display: none;">
+                    <span class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text"></span>
+                    </span>
+                    <span class="model-description"></span>
+                </div>
             </div>
         </section>
 
@@ -121,7 +147,7 @@
             <!-- System Stats Tab -->
             <div class="tab-pane" id="statsTab">
                 <div class="card stats-card">
-                    <h2><i class="fas fa-tachometer-alt"></i> System Stats</h2>
+                    <h2><i class="fas fa-tachometer-alt"></i>Stats</h2>
                     <div class="stats-grid">
                         <div class="stat-item">
                             <div class="stat-value" id="packetsCaptured">0</div>
@@ -194,10 +220,44 @@
                 <div class="card model-card">
                     <h2><i class="fas fa-robot"></i> Model Info</h2>
                     <div class="info-grid">
-                        <div class="info-item"><span>Model:</span> <span id="mlModel">--</span></div>
+                        <div class="info-item"><span>Current Model:</span> <span id="currentModel">Random Forest</span></div>
+                        <div class="info-item"><span>Model Type:</span> <span id="modelType">--</span></div>
                         <div class="info-item"><span>Dataset:</span> <span id="datasetName">--</span></div>
                         <div class="info-item"><span>Accuracy:</span> <span id="modelAccuracy">--</span></div>
                         <div class="info-item"><span>Size (KB):</span> <span id="modelSize">--</span></div>
+                        <div class="info-item"><span>Features:</span> <span id="modelFeatures">--</span></div>
+                    </div>
+                    
+                    <!-- Model Comparison Table -->
+                    <div class="model-comparison" style="margin-top: 20px;">
+                        <h3><i class="fas fa-balance-scale"></i> Model Comparison</h3>
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Accuracy</th>
+                                    <th>Speed</th>
+                                    <th>Memory</th>
+                                    <th>Best For</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>🟢 Random Forest</td>
+                                    <td>99.86%</td>
+                                    <td>🐢 Slower</td>
+                                    <td>45.4 MB</td>
+                                    <td>High-accuracy detection</td>
+                                </tr>
+                                <tr>
+                                    <td>⚡ Decision Tree</td>
+                                    <td>~99%</td>
+                                    <td>⚡ Fast</td>
+                                    <td>Small</td>
+                                    <td>Real-time monitoring</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

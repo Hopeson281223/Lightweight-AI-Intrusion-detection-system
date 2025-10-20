@@ -18,7 +18,8 @@ pip install -r requirements.txt
 python scripts/setup_db.py
 
 # Train model
-python -m app.ml.train_model
+python -m app.ml.train_DC_model
+python -m app.ml.train_DF_model
 
 # Run API
 uvicorn app.main:app --reload

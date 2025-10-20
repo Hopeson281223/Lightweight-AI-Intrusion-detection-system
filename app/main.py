@@ -57,14 +57,22 @@ class PredictRequest(BaseModel):
     src_ip: str | None = None
     dst_ip: str | None = None
     protocol: str | None = None
+    model_type: str = "decision_tree"
 
 # Load model
-def load_model(dataset: str):
+def load_model(dataset: str, model_type: str = "decision_tree"):
     """Load model and metadata from disk or cache"""
-    if dataset in loaded_models:
-        return loaded_models[dataset], loaded_meta[dataset]
+    cache_key = f"{dataset}_{model_type}"
+    
+    if cache_key in loaded_models:
+        return loaded_models[cache_key], loaded_meta[cache_key]
 
-    model_path = MODEL_DIR / f"decision_tree_{dataset}_model.joblib"
+    # Support both decision_tree and random_forest
+    if model_type == "random_forest":
+        model_path = MODEL_DIR / f"random_forest_{dataset}_model.joblib"
+    else:
+        model_path = MODEL_DIR / f"decision_tree_{dataset}_model.joblib"
+
     meta_path = PREPROCESSED_DIR / dataset / f"{dataset}_ALL_meta.pkl"
     ct_path = PREPROCESSED_DIR / dataset / f"{dataset}_ALL_ct.joblib"
     le_path = PREPROCESSED_DIR / dataset / f"{dataset}_ALL_label_encoder.joblib"
@@ -73,14 +81,14 @@ def load_model(dataset: str):
         raise HTTPException(status_code=404, detail=f"Model for {dataset} not found")
 
     model = joblib.load(model_path)
-    loaded_models[dataset] = model
+    loaded_models[cache_key] = model
 
     meta = joblib.load(meta_path) if meta_path.exists() else {}
     ct = joblib.load(ct_path) if ct_path.exists() else None
     le = joblib.load(le_path) if le_path.exists() else None
 
-    loaded_meta[dataset] = {**meta, "ct": ct, "label_encoder": le}
-    return model, loaded_meta[dataset]
+    loaded_meta[cache_key] = {**meta, "ct": ct, "label_encoder": le, "model_type": model_type}
+    return model, loaded_meta[cache_key]
 
 # Health check
 @app.get("/health")
@@ -121,9 +129,25 @@ def capture_status():
 
 @app.get("/interfaces")
 def list_interfaces():
-    """List available network interfaces"""
+    """List available network interfaces with detailed status"""
     interfaces = packet_capture.list_available_interfaces()
-    return {"interfaces": sorted(interfaces, key=lambda x: x["name"].lower())}
+    
+    # Add additional status information
+    enhanced_interfaces = []
+    for iface in interfaces:
+        enhanced_iface = {**iface}
+        
+        # Add status text
+        if iface.get("active"):
+            enhanced_iface["status"] = "active"
+            enhanced_iface["status_description"] = "Ready for capture"
+        else:
+            enhanced_iface["status"] = "inactive" 
+            enhanced_iface["status_description"] = "Interface not active"
+            
+        enhanced_interfaces.append(enhanced_iface)
+    
+    return {"interfaces": enhanced_interfaces}
 
 @app.post("/interface/{interface_name}")
 def set_interface(interface_name: str):
@@ -212,9 +236,10 @@ def get_stats():
         }
         
 # Prediction
+# Prediction
 @app.post("/predict")
 def predict(req: PredictRequest):
-    model, meta = load_model(req.dataset)
+    model, meta = load_model(req.dataset, req.model_type)  # Pass model_type here
 
     ct = meta.get("ct")
     if ct is None:
@@ -268,16 +293,17 @@ def predict(req: PredictRequest):
         "src_ip": req.src_ip or "N/A",
         "dst_ip": req.dst_ip or "N/A",
         "protocol": req.protocol or "N/A",
-        "message": f"Prediction result: {label} (conf: {prob:.2f})" if prob else f"Prediction result: {label}"
+        "message": f"Prediction result: {label} (conf: {prob:.2f})" if prob else f"Prediction result: {label}",
+        "model_type": req.model_type  # Add model type to logs
     }
     live_logs.append(json.dumps(log_entry))
-
 
     return {
         "dataset": req.dataset,
         "prediction": int(pred),
         "label": label,
-        "confidence": float(prob) if prob is not None else None
+        "confidence": float(prob) if prob is not None else None,
+        "model_type": req.model_type  # Return model type in response
     }
 
 # WebSocket for live logs
@@ -341,15 +367,53 @@ def get_metrics():
     conn.close()
     return {"metrics": [{"name": r[0], "value": r[1], "timestamp": r[2]} for r in rows]}
 
+@app.get("/available-models")
+def get_available_models():
+    """Get list of available models for the frontend"""
+    available_models = []
+    
+    # Check for decision tree model
+    dt_path = MODEL_DIR / "decision_tree_cic_model.joblib"
+    if dt_path.exists():
+        available_models.append({
+            "name": "Decision Tree",
+            "type": "decision_tree",
+            "description": "Fast and lightweight model for real-time detection",
+            "accuracy": "~99%",
+            "speed": "⚡ Fast",
+            "size": "Small"
+        })
+    
+    # Check for random forest model
+    rf_path = MODEL_DIR / "random_forest_cic_model.joblib"
+    if rf_path.exists():
+        available_models.append({
+            "name": "Random Forest", 
+            "type": "random_forest",
+            "description": "High-accuracy ensemble model for reliable detection",
+            "accuracy": "99.86%",
+            "speed": "🐢 Slower", 
+            "size": "Large"
+        })
+    
+    return {"available_models": available_models}
+
 @app.get("/models")
 def get_models():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, dataset, path, size_kb, timestamp FROM models ORDER BY timestamp DESC")
+    cur.execute("SELECT name, dataset, path, size_kb, timestamp, model_type FROM models ORDER BY timestamp DESC")
     rows = cur.fetchall()
     conn.close()
     return [
-        {"name": r[0], "dataset": r[1], "path": r[2], "size_kb": r[3], "timestamp": r[4]}
+        {
+            "name": r[0], 
+            "dataset": r[1], 
+            "path": r[2], 
+            "size_kb": r[3], 
+            "timestamp": r[4],
+            "model_type": r[5] or "decision_tree"  # Handle NULL values
+        }
         for r in rows
     ]
 
