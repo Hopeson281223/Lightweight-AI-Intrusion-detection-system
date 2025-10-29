@@ -7,6 +7,7 @@ class LAIIDSFrontend {
         this.alertCount = 0;
         this.unreadAlertCount = 0;
         this.reportsChart = null;
+        this.modelsCache = null;
         
         this.init();
     }
@@ -15,6 +16,7 @@ class LAIIDSFrontend {
         console.log("🔄 Initializing LAI-IDS Frontend...");
         this.bindEvents();
         this.bindNavbar();
+        this.updateInterfaceStatus();
         this.loadInterfaces();
         this.initThreatChart();
         this.updateStats();
@@ -39,6 +41,9 @@ class LAIIDSFrontend {
             e.stopPropagation();
             navLinks.classList.toggle("show");
             
+            const isExpanded = navLinks.classList.contains("show");
+            hamburger.setAttribute("aria-expanded", isExpanded.toString());
+
             // Toggle hamburger icon
             const icon = hamburger.querySelector('i');
             icon.className = navLinks.classList.contains("show") ? "fas fa-times" : "fas fa-bars";
@@ -75,9 +80,11 @@ class LAIIDSFrontend {
         // Remove active class from all tabs and panes
         document.querySelectorAll(".nav-tab").forEach(tab => {
             tab.classList.remove("active");
+            tab.setAttribute("aria-selected", "false");
         });
         document.querySelectorAll(".tab-pane").forEach(pane => {
             pane.classList.remove("active");
+            pane.setAttribute("hidden", "true");
         });
         
         // Add active class to clicked tab and corresponding pane
@@ -86,7 +93,9 @@ class LAIIDSFrontend {
         
         if (activeTab && activePane) {
             activeTab.classList.add("active");
+            activeTab.setAttribute("aria-selected", "true");
             activePane.classList.add("active");
+            activePane.removeAttribute("hidden");
             console.log(`🔍 Switched to tab: ${tabId}`);
             
             // Handle tab-specific actions
@@ -100,6 +109,7 @@ class LAIIDSFrontend {
             navLinks.classList.remove("show");
             const icon = hamburger.querySelector('i');
             icon.className = "fas fa-bars";
+            hamburger.setAttribute("aria-expanded", "false");
         }
     }
 
@@ -244,75 +254,89 @@ class LAIIDSFrontend {
         // Create modal overlay
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        `;
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-labelledby', 'modalTitle');
+        modal.setAttribute('aria-modal', 'true');
 
-        // Modal content
+        // Modal content with proper CSS classes
         modal.innerHTML = `
-            <div class="modal-content" style="
-                background: white;
-                padding: 30px;
-                border-radius: 12px;
-                max-width: 800px;
-                max-height: 80vh;
-                overflow-y: auto;
-                box-shadow: 0 10px 50px rgba(0,0,0,0.3);
-                position: relative;
-            ">
-                <button class="close-btn" style="
-                    position: absolute;
-                    top: 15px;
-                    right: 15px;
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: #666;
-                ">×</button>
+            <div class="modal-content">
+                <button class="close-btn" aria-label="Close modal">×</button>
                 
-                <h2 style="color: #2c3e50; margin-bottom: 20px;">
-                    <i class="fas fa-file-alt"></i> Session Report: ${sessionId}
+                <h2 id="modalTitle">
+                    <i class="fas fa-file-alt" aria-hidden="true"></i> Session Report: ${sessionId}
                 </h2>
                 
                 <div class="report-details">
                     ${this.formatReportForDisplay(reportData)}
                 </div>
                 
-                <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <div class="modal-actions">
                     <button class="btn btn-success download-in-modal" data-session="${sessionId}">
-                        <i class="fas fa-download"></i> Download PDF
+                        <i class="fas fa-download" aria-hidden="true"></i> Download PDF
                     </button>
                     <button class="btn btn-secondary close-modal">
-                        <i class="fas fa-times"></i> Close
+                        <i class="fas fa-times" aria-hidden="true"></i> Close
                     </button>
                 </div>
             </div>
         `;
 
         // Add event listeners
-        modal.querySelector('.close-btn').addEventListener('click', () => modal.remove());
-        modal.querySelector('.close-modal').addEventListener('click', () => modal.remove());
+        const closeModal = () => {
+            modal.remove();
+            // Restore focus to the button that opened the modal
+            const viewButton = document.querySelector(`[data-session="${sessionId}"]`);
+            if (viewButton) viewButton.focus();
+        };
+
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.querySelector('.close-modal').addEventListener('click', closeModal);
         modal.querySelector('.download-in-modal').addEventListener('click', (e) => {
             this.downloadReport(sessionId);
-            modal.remove();
+            closeModal();
         });
 
-        // Close on background click
+        // Close on background click or Escape key
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
+            if (e.target === modal) closeModal();
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.contains(modal)) {
+                closeModal();
+            }
         });
 
         document.body.appendChild(modal);
+
+        // Focus trap for accessibility
+        this.trapFocus(modal);
+    }
+
+    // ✅ ADDED: Focus trap for modal accessibility
+    trapFocus(modal) {
+        const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        modal.addEventListener('keydown', (e) => {
+            if (e.key !== 'Tab') return;
+
+            if (e.shiftKey) {
+                if (document.activeElement === firstElement) {
+                    lastElement.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === lastElement) {
+                    firstElement.focus();
+                    e.preventDefault();
+                }
+            }
+        });
+
+        firstElement.focus();
     }
 
     formatReportForDisplay(reportData) {
@@ -619,11 +643,11 @@ class LAIIDSFrontend {
             const res = await this.apiCall("/system");
             document.getElementById("cpuUsage").textContent = `${res.cpu}%`;
             document.getElementById("memUsage").textContent = `${res.memory}%`;
-            document.getElementById("uptime").textContent = res.uptime || "--";
+            document.getElementById("systemUptime").textContent = res.uptime || "--";
         } catch {
             document.getElementById("cpuUsage").textContent = "N/A";
             document.getElementById("memUsage").textContent = "N/A";
-            document.getElementById("uptime").textContent = "--";
+            document.getElementById("systemUptime").textContent = "--";
         }
     }
 
@@ -639,8 +663,14 @@ class LAIIDSFrontend {
         document.getElementById('modelSelect').addEventListener('change', () => {
             this.updateModelStatus();
         });
+
+        const refreshReportsBtn = document.getElementById('refreshReportsBtn');
+        if (refreshReportsBtn) {
+            refreshReportsBtn.addEventListener('click', () => this.loadReports());
+        }
     }
 
+    // ✅ ADDED: Enhanced error handling for API calls
     async apiCall(endpoint, method = 'GET', body = null) {
         try {
             const res = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -648,10 +678,28 @@ class LAIIDSFrontend {
                 headers: { 'Content-Type': 'application/json' },
                 body: body ? JSON.stringify(body) : null
             });
-            if (!res.ok) throw new Error(await res.text());
+            
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`API Error (${endpoint}):`, errorText);
+                
+                // Special handling for interfaces endpoint
+                if (endpoint === '/interfaces') {
+                    throw new Error('Failed to load network interfaces');
+                }
+                
+                throw new Error(errorText);
+            }
+            
             return await res.json();
         } catch (error) {
             console.error(`API Call failed for ${endpoint}:`, error);
+            
+            // Don't show alert for interfaces - handle gracefully
+            if (endpoint !== '/interfaces') {
+                this.log(`API Error: ${error.message}`, "error");
+            }
+            
             throw error;
         }
     }
@@ -695,16 +743,29 @@ class LAIIDSFrontend {
                     select.value = data.interfaces[0].device;
                 }
 
-                // Update interface status display
-                this.updateInterfaceStatus();
+                // Update interface status display - with delay to ensure DOM is ready
+                setTimeout(() => {
+                    this.updateInterfaceStatus();
+                    this.styleActiveInterfaces();
+                }, 100);
                 
             } else {
                 select.innerHTML = '<option disabled>No interfaces found</option>';
+                // Reset status when no interfaces
+                this.updateInterfaceStatus();
             }
         } catch (err) {
             console.error("Error loading interfaces:", err);
             this.log("Error loading interfaces", "error");
+            // Set fallback status on error
+            this.updateInterfaceStatus();
         }
+    }
+
+    showAutoSelectNotification(interfaceName) {
+        console.log(`🔄 Auto-selected active interface: ${interfaceName}`);
+        // Optional: Show a subtle notification
+        this.log(`Auto-selected active interface: ${interfaceName}`, 'info');
     }
 
     styleActiveInterfaces() {
@@ -762,6 +823,9 @@ class LAIIDSFrontend {
         if (description) {
             description.textContent = this.getModelDescription(selectedModel);
         }
+        
+        // ✅ NEW: Update model info display when model changes
+        this.updateCurrentModelInfo(selectedModel);
     }
 
     getModelDescription(modelType) {
@@ -814,6 +878,7 @@ class LAIIDSFrontend {
 
             document.getElementById('packetsCaptured').textContent = cs.packets_captured || 0;
             document.getElementById('activeFlows').textContent = cs.active_flows || 0;
+            document.getElementById('captureUptime').textContent = cs.uptime || '--';
             document.getElementById('captureStatus').textContent = cs.is_capturing ? 'Running' : 'Stopped';
             document.getElementById('currentInterface').textContent = cs.interface || '--';
 
@@ -832,19 +897,151 @@ class LAIIDSFrontend {
 
     async loadModelInfo() {
         try {
-            const models = await this.apiCall('/models');
-            if (models.length > 0) {
-                const latest = models[0];
-                document.getElementById('mlModel').textContent = latest.name;
-                document.getElementById('datasetName').textContent = latest.dataset;
-                document.getElementById('modelSize').textContent = latest.size_kb.toFixed(2);
-                document.getElementById('modelAccuracy').textContent = '≈90%';
+            const response = await this.apiCall('/models');
+            console.log('Models API response:', response);
+            
+            let models = [];
+            
+            // Handle different response formats
+            if (Array.isArray(response)) {
+                models = response;
+            } else if (response.available_models) {
+                models = response.available_models;
+            } else if (response.models) {
+                models = response.models;
             }
-        } catch {
-            this.log('No model info found', 'warn');
+            
+            console.log('Processed models:', models);
+            
+            // ✅ NEW: Cache the models for later use
+            this.modelsCache = models;
+            
+            if (models && models.length > 0) {
+                // Update model comparison table
+                this.updateModelComparison(models);
+                
+                // ✅ NEW: Update current model info based on selected model
+                const selectedModel = document.getElementById('modelSelect').value;
+                this.updateCurrentModelInfo(selectedModel);
+                
+                console.log('✅ Model info loaded and cached successfully');
+            } else {
+                this.setFallbackModelInfo();
+                console.log('⚠️ No models found in response');
+            }
+        } catch (error) {
+            console.error('Error loading model info:', error);
+            this.setFallbackModelInfo();
+        }
+    }
+    
+    // Helper function to determine accuracy based on model type
+    getModelAccuracy(model) {
+        if (model.model_type === 'random_forest') return '99.86%';
+        if (model.model_type === 'decision_tree') return '~99%';
+        return '≈90%';
+    }
+
+    // Update fallback to accept model type
+    setFallbackModelInfo(modelType = 'decision_tree') {
+        const isRandomForest = modelType === 'random_forest';
+        
+        document.getElementById('mlModel').textContent = isRandomForest ? 
+            'Random Forest (Default)' : 'Decision Tree (Default)';
+        document.getElementById('modelType').textContent = modelType;
+        document.getElementById('datasetName').textContent = 'CIC-IDS2017';
+        document.getElementById('modelSize').textContent = isRandomForest ? 
+            '45.4 MB' : '26.81 KB';
+        document.getElementById('modelAccuracy').textContent = isRandomForest ? 
+            '99.86%' : '~99%';
+        document.getElementById('modelFeatures').textContent = '46';
+    }
+
+    // ✅ NEW: Update the displayed model info based on selection
+    updateCurrentModelInfo(selectedModelType) {
+        console.log(`🔄 Updating model info for: ${selectedModelType}`);
+        
+        // Get the model data from our stored models
+        const selectedModel = this.getModelByType(selectedModelType);
+        
+        if (selectedModel) {
+            document.getElementById('mlModel').textContent = selectedModel.name || selectedModelType;
+            document.getElementById('modelType').textContent = selectedModel.model_type || selectedModelType;
+            document.getElementById('datasetName').textContent = selectedModel.dataset || 'CIC-IDS2017';
+            document.getElementById('modelSize').textContent = selectedModel.size_kb ? 
+                (selectedModel.size_kb > 1000 ? 
+                    `${(selectedModel.size_kb / 1024).toFixed(1)} MB` : 
+                    `${selectedModel.size_kb.toFixed(2)} KB`) : 'Unknown';
+            document.getElementById('modelAccuracy').textContent = this.getModelAccuracy(selectedModel);
+            document.getElementById('modelFeatures').textContent = this.getModelFeatures(selectedModel);
+        } else {
+            // Fallback for when model data isn't found
+            this.setFallbackModelInfo(selectedModelType);
         }
     }
 
+    // ✅ NEW: Get model by type from stored models
+    getModelByType(modelType) {
+        if (!this.modelsCache) return null;
+        return this.modelsCache.find(model => model.model_type === modelType);
+    }
+
+    // ✅ NEW: Get features count with fallback
+    getModelFeatures(model) {
+        if (model.feature_names) {
+            // If feature_names is an array, return its length
+            if (Array.isArray(model.feature_names)) {
+                return model.feature_names.length;
+            }
+            // If feature_names is a JSON string, parse it
+            try {
+                const features = JSON.parse(model.feature_names);
+                return Array.isArray(features) ? features.length : 'Unknown';
+            } catch (e) {
+                return 'Unknown';
+            }
+        }
+        return model.model_type === 'random_forest' ? '46' : '46';
+    }
+
+    // Update model comparison to use cached models
+    updateModelComparison(models) {
+        const tbody = document.getElementById('modelComparisonBody');
+        if (!tbody || !models || models.length === 0) return;
+
+        tbody.innerHTML = models.map(model => {
+            const isRandomForest = model.model_type === 'random_forest';
+            const isDecisionTree = model.model_type === 'decision_tree';
+            
+            const icon = isRandomForest ? '🟢' : '⚡';
+            const accuracy = this.getModelAccuracy(model);
+            const speed = isRandomForest ? '🐢 Slower' : '⚡ Fast';
+            const memory = model.size_kb ? (model.size_kb > 1000 ? 
+                `${(model.size_kb / 1024).toFixed(1)} MB` : 
+                `${model.size_kb.toFixed(1)} KB`) : 'Unknown';
+            const bestFor = isRandomForest ? 'High-accuracy detection' : 'Real-time monitoring';
+            
+            return `
+                <tr>
+                    <td>${icon} ${model.name || model.model_type}</td>
+                    <td>${accuracy}</td>
+                    <td>${speed}</td>
+                    <td>${memory}</td>
+                    <td>${bestFor}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        console.log('📊 Model comparison table updated');
+    }
+
+    // Check if model is available
+    checkModelAvailability(modelType) {
+        // This would ideally check if the model file exists
+        // For now, we'll assume both models are available since they're in the database
+        return modelType === 'random_forest' || modelType === 'decision_tree';
+    }
+    
     initThreatChart() {
         const ctx = document.getElementById('threatChart');
         if (!ctx) {
@@ -957,10 +1154,29 @@ class LAIIDSFrontend {
         const select = document.getElementById('interfaceSelect');
         const currentInterfaceSpan = document.getElementById('currentInterface');
         
-        if (!statusElement || !select || !currentInterfaceSpan) return;
+        if (!statusElement || !select || !currentInterfaceSpan) {
+            console.warn('Interface status elements not found');
+            return;
+        }
+        
+        // Use provided interface or get from select
+        const interfaceToCheck = selectedInterface || select.value;
+        
+        if (!interfaceToCheck || interfaceToCheck === 'Loading...' || select.options.length === 0) {
+            // No interface selected or still loading
+            statusElement.className = 'interface-status inactive';
+            statusElement.innerHTML = `
+                <span class="status-dot inactive"></span>
+                <span class="status-text">NOT SELECTED</span>
+            `;
+            statusElement.style.display = 'flex';
+            currentInterfaceSpan.textContent = '--';
+            currentInterfaceSpan.style.color = '#6c757d';
+            return;
+        }
         
         const selectedOption = select.selectedOptions[0];
-        if (selectedOption && selectedOption.value !== 'Loading...') {
+        if (selectedOption) {
             const isActive = selectedOption.dataset.active === 'true';
             
             // Update status display

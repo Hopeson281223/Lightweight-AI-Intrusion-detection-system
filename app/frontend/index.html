@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Lightweight AI Intrusion Detection System for network security monitoring">
     <title>LAI-IDS - Lightweight AI Intrusion Detection System</title>
     <link rel="stylesheet" href="/frontend/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
@@ -13,50 +15,57 @@
     <div class="container">
 
         <!-- ===== Header ===== -->
-        <header class="header">
+        <header class="header" role="banner">
             <div class="header-content">
-                <h1><i class="fas fa-shield-alt"></i> LAI-IDS</h1>
+                <h1><i class="fas fa-shield-alt" aria-hidden="true"></i> LAI-IDS</h1>
                 <p class="subtitle">Lightweight AI Intrusion Detection System</p>
             </div>
-            <div class="status-indicator" id="systemStatus">
-                <span class="status-dot"></span>
+            <div class="status-indicator" id="systemStatus" role="status" aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
                 <span class="status-text">Connecting...</span>
             </div>
         </header>
 
         <!-- ===== Capture Control ===== -->
-        <section class="card control-panel">
-            <h2><i class="fas fa-play-circle"></i> Capture Control</h2>
+        <section class="card control-panel" aria-labelledby="captureControlTitle">
+            <h2 id="captureControlTitle"><i class="fas fa-play-circle" aria-hidden="true"></i> Capture Control</h2>
             <div class="control-buttons">
-                <button id="startBtn" class="btn btn-success"><i class="fas fa-play"></i> Start</button>
-                <button id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Stop</button>
-                <button id="refreshBtn" class="btn btn-info"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button id="startBtn" class="btn btn-success" aria-label="Start packet capture">
+                    <i class="fas fa-play" aria-hidden="true"></i> Start
+                </button>
+                <button id="stopBtn" class="btn btn-danger" disabled aria-label="Stop packet capture">
+                    <i class="fas fa-stop" aria-hidden="true"></i> Stop
+                </button>
+                <button id="refreshBtn" class="btn btn-info" aria-label="Refresh system data">
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i> Refresh
+                </button>
             </div>
-            <!-- In your index.html, enhance the interface selector section -->
+
+            <!-- Interface Selector -->
             <div class="interface-selector">
                 <label for="interfaceSelect">Network Interface:</label>
-                <select id="interfaceSelect">
-                    <option>Loading interfaces...</option>
+                <select id="interfaceSelect" aria-describedby="interfaceStatus">
+                    <option value="loading">Loading interfaces...</option>
                 </select>
-                <div id="interfaceStatus" class="interface-status" style="display: none;">
+                <div id="interfaceStatus" class="interface-status" style="display: none;" role="status">
                     <span class="status-indicator">
-                        <span class="status-dot"></span>
+                        <span class="status-dot" aria-hidden="true"></span>
                         <span class="status-text"></span>
                     </span>
                     <span class="interface-description"></span>
                 </div>
             </div>
 
-            <!-- ===== ADD MODEL SELECTOR ===== -->
+            <!-- Model Selector -->
             <div class="model-selector">
                 <label for="modelSelect">Detection Model:</label>
-                <select id="modelSelect">
-                    <option value="random_forest">🟢 Random Forest (Higher Accuracy)</option>
+                <select id="modelSelect" aria-describedby="modelStatus">
                     <option value="decision_tree">⚡ Decision Tree (Fast)</option>
+                    <option value="random_forest">🟢 Random Forest (Higher Accuracy)</option>
                 </select>
-                <div id="modelStatus" class="model-status" style="display: none;">
+                <div id="modelStatus" class="model-status" style="display: none;" role="status">
                     <span class="status-indicator">
-                        <span class="status-dot"></span>
+                        <span class="status-dot" aria-hidden="true"></span>
                         <span class="status-text"></span>
                     </span>
                     <span class="model-description"></span>
@@ -65,39 +74,39 @@
         </section>
 
         <!-- ===== Navigation Tabs ===== -->
-        <nav class="navbar">
+        <nav class="navbar" role="navigation" aria-label="Main navigation">
             <div class="navbar-top">
                 <div class="navbar-left">
-                    <button class="hamburger" id="hamburger">
-                        <i class="fas fa-bars"></i>
+                    <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
+                        <i class="fas fa-bars" aria-hidden="true"></i>
                     </button>
                     <span class="nav-title">Dashboard</span>
                 </div>
             </div>
 
-            <div class="nav-links" id="navLinks">
+            <div class="nav-links" id="navLinks" role="tablist">
                 <div class="nav-tabs-container">
-                    <button class="nav-tab active" data-tab="logsTab">
-                        <i class="fas fa-terminal"></i> Live Logs
+                    <button class="nav-tab active" data-tab="logsTab" role="tab" aria-selected="true" aria-controls="logsTab">
+                        <i class="fas fa-terminal" aria-hidden="true"></i> Live Logs
                     </button>
-                    <button class="nav-tab" data-tab="alertsTab">
-                        <i class="fas fa-bell"></i> Alerts 
-                        <span class="alert-badge" id="alertBadge">0</span>
+                    <button class="nav-tab" data-tab="alertsTab" role="tab" aria-selected="false" aria-controls="alertsTab">
+                        <i class="fas fa-bell" aria-hidden="true"></i> Alerts 
+                        <span class="alert-badge" id="alertBadge" aria-live="polite">0</span>
                     </button>
-                    <button class="nav-tab" data-tab="threatTab">
-                        <i class="fas fa-exclamation-triangle"></i> Threats
+                    <button class="nav-tab" data-tab="threatTab" role="tab" aria-selected="false" aria-controls="threatTab">
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Threats
                     </button>
-                    <button class="nav-tab" data-tab="statsTab">
-                        <i class="fas fa-tachometer-alt"></i> Stats
+                    <button class="nav-tab" data-tab="statsTab" role="tab" aria-selected="false" aria-controls="statsTab">
+                        <i class="fas fa-tachometer-alt" aria-hidden="true"></i> Stats
                     </button>
-                    <button class="nav-tab" data-tab="reportsTab">
-                        <i class="fas fa-file-alt"></i> Reports
+                    <button class="nav-tab" data-tab="reportsTab" role="tab" aria-selected="false" aria-controls="reportsTab">
+                        <i class="fas fa-file-alt" aria-hidden="true"></i> Reports
                     </button>
-                    <button class="nav-tab" data-tab="modelTab">
-                        <i class="fas fa-robot"></i> Model Info
+                    <button class="nav-tab" data-tab="modelTab" role="tab" aria-selected="false" aria-controls="modelTab">
+                        <i class="fas fa-robot" aria-hidden="true"></i> Model Info
                     </button>
-                    <button class="nav-tab" data-tab="systemTab">
-                        <i class="fas fa-info-circle"></i> System Info
+                    <button class="nav-tab" data-tab="systemTab" role="tab" aria-selected="false" aria-controls="systemTab">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i> System Info
                     </button>
                 </div>
             </div>
@@ -105,49 +114,50 @@
 
         <!-- ===== Tab Content Sections ===== -->
         <div class="tab-content">
-
             <!-- Live Logs Tab -->
-            <div class="tab-pane active" id="logsTab">
+            <div class="tab-pane active" id="logsTab" role="tabpanel" aria-labelledby="logsTab" tabindex="0">
                 <div class="card log-card">
-                    <h2><i class="fas fa-terminal"></i> Live Logs</h2>
-                    <div id="captureLog" class="capture-log">
+                    <h2><i class="fas fa-terminal" aria-hidden="true"></i> Live Logs</h2>
+                    <div id="captureLog" class="capture-log" aria-live="polite" aria-atomic="false" role="log">
                         <div class="log-entry">System initializing...</div>
                     </div>
                 </div>
             </div>
 
             <!-- Alerts Tab -->
-            <div class="tab-pane" id="alertsTab">
+            <div class="tab-pane" id="alertsTab" role="tabpanel" aria-labelledby="alertsTab" tabindex="0" hidden>
                 <div class="card alerts-card">
-                    <h2><i class="fas fa-bell"></i> Alerts</h2>
-                    <table class="alerts-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Label</th>
-                                <th>Confidence</th>
-                                <th>Severity</th>
-                            </tr>
-                        </thead>
-                        <tbody id="alertsBody">
-                            <tr><td colspan="4" style="text-align:center;">No alerts detected</td></tr>
-                        </tbody>
-                    </table>
+                    <h2><i class="fas fa-bell" aria-hidden="true"></i> Alerts</h2>
+                    <div class="table-container" role="region" aria-labelledby="alertsTitle">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Time</th>
+                                    <th scope="col">Label</th>
+                                    <th scope="col">Confidence</th>
+                                    <th scope="col">Severity</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertsBody">
+                                <tr><td colspan="4" style="text-align:center;">No alerts detected</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <!-- Threat Visualization Tab -->
-            <div class="tab-pane" id="threatTab">
+            <div class="tab-pane" id="threatTab" role="tabpanel" aria-labelledby="threatTab" tabindex="0" hidden>
                 <div class="card threat-card">
-                    <h2><i class="fas fa-exclamation-triangle"></i> Threat Visualization</h2>
-                    <canvas id="threatChart" height="150"></canvas>
+                    <h2><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Threat Visualization</h2>
+                    <canvas id="threatChart" height="150" aria-label="Threat detection visualization chart"></canvas>
                 </div>
             </div>
 
             <!-- System Stats Tab -->
-            <div class="tab-pane" id="statsTab">
+            <div class="tab-pane" id="statsTab" role="tabpanel" aria-labelledby="statsTab" tabindex="0" hidden>
                 <div class="card stats-card">
-                    <h2><i class="fas fa-tachometer-alt"></i>Stats</h2>
+                    <h2><i class="fas fa-tachometer-alt" aria-hidden="true"></i> Stats</h2>
                     <div class="stats-grid">
                         <div class="stat-item">
                             <div class="stat-value" id="packetsCaptured">0</div>
@@ -158,7 +168,7 @@
                             <div class="stat-label">Active Flows</div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-value" id="systemUptime">--</div>
+                            <div class="stat-value" id="captureUptime">--</div>
                             <div class="stat-label">Uptime</div>
                         </div>
                     </div>
@@ -166,22 +176,22 @@
             </div>
 
             <!-- Reports Tab -->
-            <div class="tab-pane" id="reportsTab">
+            <div class="tab-pane" id="reportsTab" role="tabpanel" aria-labelledby="reportsTab" tabindex="0" hidden>
                 <div class="card reports-card">
-                    <h2><i class="fas fa-file-alt"></i> Reports</h2>
+                    <h2><i class="fas fa-file-alt" aria-hidden="true"></i> Reports</h2>
                     <p>View and download system detection reports.</p>
 
-                    <!-- ===== Report Actions ===== -->
+                    <!-- Report Actions -->
                     <div class="reports-actions">
-                        <button id="refreshReportsBtn" class="btn btn-secondary">
-                            <i class="fas fa-sync-alt"></i> Refresh
+                        <button id="refreshReportsBtn" class="btn btn-secondary" aria-label="Refresh reports list">
+                            <i class="fas fa-sync-alt" aria-hidden="true"></i> Refresh
                         </button>
                     </div>
 
-                    <!-- ===== Filter/Search Bar ===== -->
+                    <!-- Filter/Search Bar -->
                     <div class="report-filters">
-                        <input type="text" id="reportSearch" placeholder="Search reports..." class="input">
-                        <select id="reportTypeFilter">
+                        <input type="text" id="reportSearch" placeholder="Search reports..." class="input" aria-label="Search reports">
+                        <select id="reportTypeFilter" aria-label="Filter report type">
                             <option value="all">All Types</option>
                             <option value="alert">Alert Summary</option>
                             <option value="system">System Stats</option>
@@ -189,16 +199,16 @@
                         </select>
                     </div>
 
-                    <!-- ===== Reports Table ===== -->
+                    <!-- Reports Table -->
                     <div class="reports-content">
                         <table class="reports-table">
                             <thead>
                                 <tr>
-                                    <th>Timestamp</th>
-                                    <th>Type</th>
-                                    <th>Detected Threats</th>
-                                    <th>File</th>
-                                    <th>Action</th>
+                                    <th scope="col">Timestamp</th>
+                                    <th scope="col">Type</th>
+                                    <th scope="col">Detected Threats</th>
+                                    <th scope="col">File</th>
+                                    <th scope="col">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="reportsBody">
@@ -207,20 +217,20 @@
                         </table>
                     </div>
 
-                    <!-- ===== Summary Section ===== -->
+                    <!-- Summary Section -->
                     <div class="report-summary">
-                        <h3><i class="fas fa-chart-bar"></i> Recent Summary</h3>
-                        <canvas id="reportChart" height="120"></canvas>
+                        <h3><i class="fas fa-chart-bar" aria-hidden="true"></i> Recent Summary</h3>
+                        <canvas id="reportChart" height="120" aria-label="Reports summary chart"></canvas>
                     </div>
                 </div>
             </div>
 
             <!-- Model Info Tab -->
-            <div class="tab-pane" id="modelTab">
+            <div class="tab-pane" id="modelTab" role="tabpanel" aria-labelledby="modelTab" tabindex="0" hidden>
                 <div class="card model-card">
-                    <h2><i class="fas fa-robot"></i> Model Info</h2>
+                    <h2><i class="fas fa-robot" aria-hidden="true"></i> Model Info</h2>
                     <div class="info-grid">
-                        <div class="info-item"><span>Current Model:</span> <span id="currentModel">Random Forest</span></div>
+                        <div class="info-item"><span>Current Model:</span> <span id="mlModel">--</span></div>
                         <div class="info-item"><span>Model Type:</span> <span id="modelType">--</span></div>
                         <div class="info-item"><span>Dataset:</span> <span id="datasetName">--</span></div>
                         <div class="info-item"><span>Accuracy:</span> <span id="modelAccuracy">--</span></div>
@@ -230,31 +240,20 @@
                     
                     <!-- Model Comparison Table -->
                     <div class="model-comparison" style="margin-top: 20px;">
-                        <h3><i class="fas fa-balance-scale"></i> Model Comparison</h3>
+                        <h3><i class="fas fa-balance-scale" aria-hidden="true"></i> Model Comparison</h3>
                         <table class="comparison-table">
                             <thead>
                                 <tr>
-                                    <th>Model</th>
-                                    <th>Accuracy</th>
-                                    <th>Speed</th>
-                                    <th>Memory</th>
-                                    <th>Best For</th>
+                                    <th scope="col">Model</th>
+                                    <th scope="col">Accuracy</th>
+                                    <th scope="col">Speed</th>
+                                    <th scope="col">Memory</th>
+                                    <th scope="col">Best For</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="modelComparisonBody">
                                 <tr>
-                                    <td>🟢 Random Forest</td>
-                                    <td>99.86%</td>
-                                    <td>🐢 Slower</td>
-                                    <td>45.4 MB</td>
-                                    <td>High-accuracy detection</td>
-                                </tr>
-                                <tr>
-                                    <td>⚡ Decision Tree</td>
-                                    <td>~99%</td>
-                                    <td>⚡ Fast</td>
-                                    <td>Small</td>
-                                    <td>Real-time monitoring</td>
+                                    <td colspan="5" style="text-align: center;" aria-live="polite">Loading model data...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -263,24 +262,24 @@
             </div>
 
             <!-- System Info Tab -->
-            <div class="tab-pane" id="systemTab">
+            <div class="tab-pane" id="systemTab" role="tabpanel" aria-labelledby="systemTab" tabindex="0" hidden>
                 <div class="card info-card">
-                    <h2><i class="fas fa-info-circle"></i> System Info</h2>
+                    <h2><i class="fas fa-info-circle" aria-hidden="true"></i> System Info</h2>
                     <div class="info-grid">
                         <div class="info-item"><span>Status:</span> <span id="captureStatus">Stopped</span></div>
                         <div class="info-item"><span>Interface:</span> <span id="currentInterface">--</span></div>
-                        <div class="info-item"><span>Health:</span> <span id="systemHealth">--</span></div>
                         <div class="info-item"><span>CPU Usage:</span> <span id="cpuUsage">--%</span></div>
                         <div class="info-item"><span>Memory Usage:</span> <span id="memUsage">--%</span></div>
-                        <div class="info-item"><span>System Uptime:</span> <span id="uptime">--:--:--</span></div>
+                        <div class="info-item"><span>System Uptime:</span> <span id="systemUptime">--:--:--</span></div>
                         <div class="info-item"><span>Version:</span> <span id="systemVersion">0.1.0</span></div>
                     </div>
                 </div>
             </div>
-
-
         </div>
     </div>
+
+    <!-- Screen Reader Announcements -->
+    <div id="liveAnnouncements" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
     <script src="/frontend/app.js"></script>
 </body>
