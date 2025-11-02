@@ -6,7 +6,6 @@ class LAIIDSFrontend {
         this.chart = null;
         this.alertCount = 0;
         this.unreadAlertCount = 0;
-        this.reportsChart = null;
         this.modelsCache = null;
         
         this.init();
@@ -24,6 +23,7 @@ class LAIIDSFrontend {
         this.startWebSocket();
         this.loadReports();
         this.updateModelStatus();
+        this.bindEnhancedSearch();
 
         // Set up intervals
         setInterval(() => this.updateStats(), 4000);
@@ -72,6 +72,26 @@ class LAIIDSFrontend {
                 navLinks.classList.remove("show");
                 const icon = hamburger.querySelector('i');
                 icon.className = "fas fa-bars";
+            }
+        });
+    }
+
+    bindEnhancedSearch() {
+        const searchInput = document.getElementById('reportSearch');
+        let searchTimeout;
+        
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.filterReports(e.target.value);
+            }, 300); // 300ms delay for better performance
+        });
+        
+        // Clear search button
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                this.filterReports('');
             }
         });
     }
@@ -134,9 +154,8 @@ class LAIIDSFrontend {
                 this.updateStats();
                 break;
 
-            case 'reportsTab': // NEW: Handle reports tab activation
+            case 'reportsTab': 
                 this.loadReports();
-                this.initReportsChart();
                 break;
         }
     }
@@ -446,139 +465,80 @@ class LAIIDSFrontend {
 
     filterReports(searchTerm) {
         const rows = document.querySelectorAll('#reportsBody tr');
+        const searchLower = searchTerm.toLowerCase().trim();
+        
         rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm.toLowerCase()) ? '' : 'none';
+            if (searchLower === '') {
+                row.style.display = '';
+                return;
+            }
+            
+            // Search across multiple columns
+            const timestamp = row.cells[0].textContent.toLowerCase();
+            const type = row.cells[1].textContent.toLowerCase();
+            const threats = row.cells[2].textContent.toLowerCase();
+            const filename = row.cells[3].textContent.toLowerCase();
+            const sessionId = row.cells[4].querySelector('.view-report')?.dataset.session || '';
+            
+            const matches = timestamp.includes(searchLower) ||
+                        type.includes(searchLower) ||
+                        threats.includes(searchLower) ||
+                        filename.includes(searchLower) ||
+                        sessionId.includes(searchLower);
+            
+            row.style.display = matches ? '' : 'none';
         });
+        
+        // Update search results count
+        this.updateSearchResultsCount();
+    }
+
+    updateSearchResultsCount() {
+        const visibleRows = document.querySelectorAll('#reportsBody tr[style=""]').length;
+        const totalRows = document.querySelectorAll('#reportsBody tr').length;
+        const searchInput = document.getElementById('reportSearch');
+        
+        // Create or update results counter
+        let counter = document.getElementById('searchResultsCounter');
+        if (!counter) {
+            counter = document.createElement('div');
+            counter.id = 'searchResultsCounter';
+            counter.className = 'search-results-counter';
+            searchInput.parentNode.appendChild(counter);
+        }
+        
+        if (searchInput.value.trim()) {
+            counter.textContent = `Showing ${visibleRows} of ${totalRows} reports`;
+            counter.style.display = 'block';
+        } else {
+            counter.style.display = 'none';
+        }
     }
 
     filterReportsByType(type) {
         const rows = document.querySelectorAll('#reportsBody tr');
+        const searchTerm = document.getElementById('reportSearch').value.toLowerCase();
+        
         rows.forEach(row => {
-            if (type === 'all') {
+            if (type === 'all' && !searchTerm) {
                 row.style.display = '';
                 return;
             }
             
             const reportType = row.cells[1].textContent.toLowerCase();
-            row.style.display = reportType.includes(type.toLowerCase()) ? '' : 'none';
-        });
-    }
-
-    initReportsChart() {
-        const ctx = document.getElementById('reportChart');
-        if (!ctx) {
-            console.warn('Report chart canvas not found');
-            return;
-        }
-
-        // Properly destroy existing chart
-        if (this.reportsChart) {
-            this.reportsChart.destroy();
-            this.reportsChart = null;
-        }
-
-        // Get real data instead of static sample data
-        const chartData = this.getReportsChartData();
-        
-        this.reportsChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Sessions', 'Alerts', 'Threats', 'Packets'],
-                datasets: [{
-                    label: 'Current Statistics',
-                    data: chartData,
-                    backgroundColor: [
-                        'rgba(52, 152, 219, 0.8)',
-                        'rgba(231, 76, 60, 0.8)',
-                        'rgba(243, 156, 18, 0.8)',
-                        'rgba(46, 204, 113, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgb(52, 152, 219)',
-                        'rgb(231, 76, 60)',
-                        'rgb(243, 156, 18)',
-                        'rgb(46, 204, 113)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0 // Only show whole numbers
-                        },
-                        // Prevent infinite scaling
-                        suggestedMax: Math.max(...chartData) * 1.2 || 10
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    title: {
-                        display: true,
-                        text: 'Current Session Overview'
-                    }
-                },
-                // Prevent chart animation from causing overflow
-                animation: {
-                    duration: 1000,
-                    easing: 'easeOutQuart'
-                },
-                // Ensure chart stays within bounds
-                layout: {
-                    padding: {
-                        left: 10,
-                        right: 10,
-                        top: 10,
-                        bottom: 10
-                    }
-                }
+            const matchesType = type === 'all' || reportType.includes(type.toLowerCase());
+            
+            // Also consider search term if present
+            let matchesSearch = true;
+            if (searchTerm) {
+                const rowText = row.textContent.toLowerCase();
+                matchesSearch = rowText.includes(searchTerm);
             }
+            
+            row.style.display = (matchesType && matchesSearch) ? '' : 'none';
         });
-
-        console.log('📊 Reports chart initialized with data:', chartData);
-    }
-
-    getReportsChartData() {
-        try {
-            // Get actual data from current UI elements and stats
-            const packetsElement = document.getElementById('packetsCaptured');
-            const alertsElement = document.getElementById('alertBadge');
-            
-            const packets = packetsElement ? parseInt(packetsElement.textContent) || 0 : 0;
-            const alerts = alertsElement ? parseInt(alertsElement.textContent) || 0 : 0;
-            
-            // For sessions count - you might want to get this from your API
-            // For now, we'll use a reasonable estimate
-            const sessions = 1; // Current active session
-            
-            // For threats - estimate based on alerts or get from threat distribution
-            const threats = Math.max(0, Math.floor(alerts * 0.7)); // Estimate threats from alerts
-            
-            return [sessions, alerts, threats, packets];
-        } catch (error) {
-            console.warn('Could not get chart data from DOM:', error);
-            return [1, 0, 0, 0]; // Fallback to minimal data
-        }
-    }
-
-    updateReportsChart() {
-        if (!this.reportsChart) return;
         
-        const newData = this.getReportsChartData();
-        this.reportsChart.data.datasets[0].data = newData;
-        
-        // Update the suggested max for y-axis
-        this.reportsChart.options.scales.y.suggestedMax = Math.max(...newData) * 1.2 || 10;
-        
-        this.reportsChart.update('none'); // 'none' prevents animation that could cause overflow
-        console.log('📈 Reports chart updated with new data:', newData);
+        this.updateSearchResultsCount();
     }
 
     updateAlertBadge() {
@@ -886,10 +846,6 @@ class LAIIDSFrontend {
 
             this.updateThreatChart(stats.threat_distribution || {});
             
-            // Also update reports chart if it exists and we're on reports tab
-            if (this.reportsChart && document.getElementById('reportsTab').classList.contains('active')) {
-                this.updateReportsChart();
-            }
         } catch (err) {
             this.log(`Error fetching stats: ${err}`, 'error');
         }
@@ -1164,10 +1120,11 @@ class LAIIDSFrontend {
         
         if (!interfaceToCheck || interfaceToCheck === 'Loading...' || select.options.length === 0) {
             // No interface selected or still loading
-            statusElement.className = 'interface-status inactive';
+            // Update status display
+            statusElement.className = `interface-status ${isActive ? 'active' : 'inactive'}`;
             statusElement.innerHTML = `
-                <span class="status-dot inactive"></span>
-                <span class="status-text">NOT SELECTED</span>
+                <span class="status-dot ${isActive ? 'active' : 'inactive'}"></span>
+                <span class="status-text">${isActive ? 'ACTIVE' : 'INACTIVE'}</span>
             `;
             statusElement.style.display = 'flex';
             currentInterfaceSpan.textContent = '--';

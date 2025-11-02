@@ -521,10 +521,22 @@ def download_report(session_id: str):
     session = report_data["session"]
     predictions = report_data["predictions"]
     alerts = report_data["alerts"]
-    live_logs = report_data.get("live_logs", [])  # Get live logs from report data
+    live_logs = report_data.get("live_logs", [])
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer)
+    
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import inch
+    
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=A4,
+        topMargin=0.5*inch,
+        bottomMargin=0.5*inch,
+        leftMargin=0.4*inch,
+        rightMargin=0.4*inch
+    )
+    
     styles = getSampleStyleSheet()
     elements = []
 
@@ -532,48 +544,144 @@ def download_report(session_id: str):
     elements.append(Paragraph(f"LAI-IDS Session Report: {session_id}", styles["Title"]))
     elements.append(Spacer(1, 12))
 
-    # Session info
+    # Session info - IMPROVED: Better interface name formatting
     elements.append(Paragraph("<b>Session Information</b>", styles["Heading2"]))
+    
+    # Format interface name properly
+    interface_name = session.get("interface", "Unknown Interface")
+    
+    # Clean up interface name for display
+    def format_interface_name(interface):
+        """Convert raw interface name to user-friendly format"""
+        if not interface or interface == "Unknown Interface":
+            return "Not Specified"
+        
+        # Remove Windows device prefix if present
+        if interface.startswith(r'\Device\NPF_'):
+            # Try to extract a meaningful name
+            if 'Ethernet' in interface:
+                return 'Ethernet Adapter'
+            elif 'Wi-Fi' in interface or 'Wireless' in interface:
+                return 'Wi-Fi Adapter'
+            elif 'Local Area Connection' in interface:
+                return 'Local Area Connection'
+            else:
+                return 'Network Adapter'
+        
+        # For Linux/macOS interface names
+        interface_mapping = {
+            'eth0': 'Ethernet (eth0)',
+            'eth1': 'Ethernet (eth1)', 
+            'wlan0': 'Wi-Fi (wlan0)',
+            'wlan1': 'Wi-Fi (wlan1)',
+            'en0': 'Ethernet (en0)',
+            'en1': 'Wi-Fi (en1)',
+            'lo': 'Loopback',
+            'any': 'All Interfaces'
+        }
+        
+        return interface_mapping.get(interface, interface)
+    
+    formatted_interface = format_interface_name(interface_name)
+    
+    # Format dates properly
+    def format_date(date_string):
+        """Format date string for better readability"""
+        if not date_string or date_string == 'N/A':
+            return 'N/A'
+        try:
+            # Handle both ISO format and existing formatted dates
+            if 'T' in date_string:  # ISO format
+                dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                return date_string  # Already formatted
+        except:
+            return date_string
+    
     info_data = [
-        ["Interface", session["interface"]],
-        ["Start Time", session["start_time"]],
-        ["End Time", session["end_time"]],
-        ["Total Packets", session["total_packets"]],
-        ["Total Predictions", session["total_predictions"]],
-        ["Total Alerts", session["total_alerts"]],
+        ["Session ID", session_id],
+        ["Network Interface", formatted_interface],
+        ["Start Time", format_date(session.get("start_time"))],
+        ["End Time", format_date(session.get("end_time"))],
+        ["Total Packets", str(session.get("total_packets", 0))],
+        ["Total Predictions", str(session.get("total_predictions", 0))],
+        ["Total Alerts", str(session.get("total_alerts", 0))],
+        ["Capture Status", "Completed" if session.get("end_time") else "In Progress"],
     ]
+    
     info_table = Table(info_data, colWidths=[150, 350])
     info_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495e")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 2), (-1, 2), colors.whitesmoke),
+        ("BACKGROUND", (0, 4), (-1, 4), colors.whitesmoke),
+        ("BACKGROUND", (0, 6), (-1, 6), colors.whitesmoke),
         ("BOX", (0, 0), (-1, -1), 1, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("PADDING", (0, 0), (-1, -1), 6),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),  # Header row bold
     ]))
     elements.append(info_table)
     elements.append(Spacer(1, 12))
 
-    # Prediction Summary
+    # Prediction Summary - IMPROVED: Better formatting and colors
     elements.append(Paragraph("<b>Prediction Summary</b>", styles["Heading2"]))
-    pred_data = [["Label", "Count"]] + [[k, v] for k, v in predictions.items()]
-    pred_table = Table(pred_data, colWidths=[250, 250])
-    pred_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+    
+    # Ensure we have both NORMAL and ANOMALOUS keys
+    normal_count = predictions.get("NORMAL", 0)
+    anomalous_count = predictions.get("ANOMALOUS", 0)
+    total_predictions = normal_count + anomalous_count
+    
+    # Calculate percentages
+    normal_percent = (normal_count / total_predictions * 100) if total_predictions > 0 else 0
+    anomalous_percent = (anomalous_count / total_predictions * 100) if total_predictions > 0 else 0
+    
+    pred_data = [
+        ["Label", "Count", "Percentage"],
+        ["NORMAL", str(normal_count), f"{normal_percent:.1f}%"],
+        ["ANOMALOUS", str(anomalous_count), f"{anomalous_percent:.1f}%"],
+        ["TOTAL", str(total_predictions), "100%"]
+    ]
+    
+    pred_table = Table(pred_data, colWidths=[200, 100, 100])
+    
+    # Create table style with conditional coloring
+    pred_style = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#d4edda")),  # Green for normal
+        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#f8d7da")),  # Red for anomalous
+        ("BACKGROUND", (0, 3), (-1, 3), colors.lightgrey),  # Grey for total
         ("BOX", (0, 0), (-1, -1), 1, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
-    ]))
+        ("PADDING", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 3), (-1, 3), "Helvetica-Bold"),  # Total row bold
+    ])
+    
+    pred_table.setStyle(pred_style)
     elements.append(pred_table)
     elements.append(Spacer(1, 12))
 
-    # Alerts
+    # Rest of your existing code for Alerts and Live Logs remains the same...
+    # Alerts section
     elements.append(Paragraph("<b>Recent Alerts</b>", styles["Heading2"]))
     if alerts:
         alert_data = [["Severity", "Message", "Timestamp"]] + [
-            [a["severity"], a["message"], a["created_at"]] for a in alerts
+            [a["severity"], a["message"], format_date(a["created_at"])] for a in alerts
         ]
-        alert_table = Table(alert_data, colWidths=[100, 300, 100])
+        alert_table = Table(alert_data, colWidths=[80, 320, 100])
         alert_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
             ("BOX", (0, 0), (-1, -1), 1, colors.black),
             ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("PADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("WORDWRAP", (1, 0), (1, -1), True),
         ]))
         elements.append(alert_table)
     else:
@@ -581,12 +689,11 @@ def download_report(session_id: str):
     
     elements.append(Spacer(1, 12))
 
-    # === ADD LIVE LOGS SECTION ===
+    # Live Logs Section
     elements.append(Paragraph("<b>Live Session Logs</b>", styles["Heading2"]))
     
     if live_logs:
-        # Show all logs in a readable format
-        log_data = [["Timestamp", "Source", "Destination", "Protocol", "Prediction", "Confidence"]]
+        log_data = [["Timestamp", "Source IP", "Dest IP", "Protocol", "Prediction", "Confidence"]]
         
         for log_entry in live_logs:
             timestamp = log_entry.get("timestamp", "N/A")
@@ -596,34 +703,88 @@ def download_report(session_id: str):
             label = log_entry.get("label", "UNKNOWN")
             confidence = log_entry.get("confidence")
             
-            conf_text = f"{confidence:.2f}" if confidence else "N/A"
+            # Truncate long IP addresses to prevent overflow
+            if len(src_ip) > 15:
+                src_ip = src_ip[:12] + "..."
+            if len(dst_ip) > 15:
+                dst_ip = dst_ip[:12] + "..."
+            
+            conf_text = f"{confidence:.2f}" if confidence is not None else "N/A"
             
             log_data.append([timestamp, src_ip, dst_ip, protocol, label, conf_text])
         
-        # Create live logs table
-        log_table = Table(log_data, colWidths=[60, 80, 80, 50, 60, 50])
+        log_table = Table(log_data, colWidths=[70, 75, 75, 50, 60, 50])
+        
         log_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTSIZE", (0, 1), (-1, -1), 7),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
             ("BOX", (0, 0), (-1, -1), 1, colors.black),
             ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.whitesmoke]),
+            ("PADDING", (0, 0), (-1, -1), 4),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("ALIGN", (1, 1), (2, -1), "LEFT"),
+            ("WORDWRAP", (0, 0), (-1, -1), True),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
         ]))
+        
         elements.append(log_table)
         
+        elements.append(Spacer(1, 6))
         elements.append(Paragraph(f"<i>Total log entries: {len(live_logs)}</i>", styles["Normal"]))
+        
+        threat_count = sum(1 for log in live_logs if log.get("label") == "ANOMALOUS")
+        elements.append(Paragraph(f"<i>Threats detected: {threat_count}</i>", styles["Normal"]))
+        
     else:
         elements.append(Paragraph("No live logs recorded for this session.", styles["Normal"]))
-    # ==============================
-
-    doc.build(elements)
-    buffer.seek(0)
-
-    filename = f"LAI-IDS_Report_{session_id}.pdf"
     
-    from fastapi import Response
-    return Response(
-        content=buffer.getvalue(),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    elements.append(Spacer(1, 12))
+
+    # Final Summary Section
+    elements.append(Paragraph("<b>Security Summary</b>", styles["Heading2"]))
+    
+    summary_data = [
+        ["Metric", "Value", "Risk Level"],
+        ["Total Predictions", str(total_predictions), "Baseline"],
+        ["Normal Traffic", f"{normal_count} ({normal_percent:.1f}%)", "Low"],
+        ["Anomalous Traffic", f"{anomalous_count} ({anomalous_percent:.1f}%)", 
+         "High" if anomalous_percent > 5 else "Medium" if anomalous_percent > 1 else "Low"],
+        ["Alerts Generated", str(session.get("total_alerts", 0)), 
+         "High" if session.get("total_alerts", 0) > 10 else "Medium" if session.get("total_alerts", 0) > 5 else "Low"],
+        ["Threat Detection Rate", f"{(anomalous_count/total_predictions*100) if total_predictions > 0 else 0:.2f}%", 
+         "Monitor" if anomalous_count > 0 else "Secure"],
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[150, 120, 80])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495e")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("PADDING", (0, 0), (-1, -1), 6),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+    ]))
+    elements.append(summary_table)
+
+    try:
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"LAI-IDS_Report_{session_id}.pdf"
+        
+        from fastapi import Response
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        print(f"PDF generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+    

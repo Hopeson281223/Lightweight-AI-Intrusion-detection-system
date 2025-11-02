@@ -44,31 +44,25 @@
             <!-- Interface Selector -->
             <div class="interface-selector">
                 <label for="interfaceSelect">Network Interface:</label>
-                <select id="interfaceSelect" aria-describedby="interfaceStatus">
+                <select id="interfaceSelect">
                     <option value="loading">Loading interfaces...</option>
                 </select>
-                <div id="interfaceStatus" class="interface-status" style="display: none;" role="status">
-                    <span class="status-indicator">
-                        <span class="status-dot" aria-hidden="true"></span>
-                        <span class="status-text"></span>
-                    </span>
-                    <span class="interface-description"></span>
+                <div id="interfaceStatus" class="interface-status" style="display: none;">
+                    <span class="status-dot"></span>
+                    <span class="status-text"></span>
                 </div>
             </div>
 
             <!-- Model Selector -->
             <div class="model-selector">
                 <label for="modelSelect">Detection Model:</label>
-                <select id="modelSelect" aria-describedby="modelStatus">
-                    <option value="decision_tree">⚡ Decision Tree (Fast)</option>
-                    <option value="random_forest">🟢 Random Forest (Higher Accuracy)</option>
+                <select id="modelSelect">
+                    <option value="decision_tree">⚡ Decision Tree (Fast and lightweight model)</option>
+                    <option value="random_forest">📈 Random Forest (Higher Accuracy)</option>
                 </select>
-                <div id="modelStatus" class="model-status" style="display: none;" role="status">
-                    <span class="status-indicator">
-                        <span class="status-dot" aria-hidden="true"></span>
-                        <span class="status-text"></span>
-                    </span>
-                    <span class="model-description"></span>
+                <div id="modelStatus" class="model-status" style="display: none;">
+                    <span class="status-dot"></span>
+                    <span class="status-text"></span>
                 </div>
             </div>
         </section>
@@ -215,12 +209,6 @@
                                 <tr><td colspan="5" style="text-align:center;">No reports found.</td></tr>
                             </tbody>
                         </table>
-                    </div>
-
-                    <!-- Summary Section -->
-                    <div class="report-summary">
-                        <h3><i class="fas fa-chart-bar" aria-hidden="true"></i> Recent Summary</h3>
-                        <canvas id="reportChart" height="120" aria-label="Reports summary chart"></canvas>
                     </div>
                 </div>
             </div>
