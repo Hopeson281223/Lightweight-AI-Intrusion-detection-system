@@ -901,6 +901,7 @@ body {
     margin-bottom: 30px;
     padding-bottom: 20px;
     border-bottom: 1px solid #ecf0f1;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .report-section:last-child {
@@ -938,6 +939,7 @@ body {
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
     transition: transform 0.2s ease;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .info-grid-pdf div:hover {
@@ -958,13 +960,14 @@ body {
     font-size: 1em;
 }
 
-/* Prediction Summary Styling */
+/* Prediction Summary Styling - FIXED FOR DARK TEXT */
 .prediction-summary {
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     padding: 20px;
     border-radius: 10px;
     border: 1px solid #e9ecef;
     margin-bottom: 20px;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .prediction-item {
@@ -974,6 +977,7 @@ body {
     padding: 10px 0;
     border-bottom: 1px solid #ecf0f1;
     transition: background-color 0.2s ease;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .prediction-item:hover {
@@ -994,17 +998,17 @@ body {
 }
 
 .prediction-label.normal {
-    color: var(--success-color);
+    color: var(--success-color) !important;
 }
 
 .prediction-label.anomalous {
-    color: var(--danger-color);
+    color: var(--danger-color) !important;
 }
 
 .prediction-count {
     font-weight: 700;
     font-size: 1.1em;
-    color: var(--secondary-color);
+    color: var(--secondary-color) !important;
 }
 
 /* Alerts List Styling for PDF Preview */
@@ -1024,6 +1028,7 @@ body {
     background: white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .alert-item:hover {
@@ -1062,10 +1067,11 @@ body {
     font-size: 0.95em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    color: #2c3e50 !important; /* Force dark text */
 }
 
 .alert-header small {
-    color: #7f8c8d;
+    color: #7f8c8d !important; /* Force dark text */
     font-size: 0.8em;
     background: rgba(255, 255, 255, 0.7);
     padding: 2px 8px;
@@ -1074,7 +1080,7 @@ body {
 
 .alert-message {
     font-size: 0.9em;
-    color: #2c3e50;
+    color: #2c3e50 !important; /* Force dark text */
     line-height: 1.4;
 }
 
@@ -1151,6 +1157,88 @@ body {
     font-size: 2em;
     margin-right: 15px;
     animation: spin 1s linear infinite;
+}
+
+/* ===== DARK MODE FIXES FOR REPORT SECTIONS ===== */
+/* Ensure all text in report sections stays dark and readable in both modes */
+.modal-content .report-section,
+.modal-content .report-details,
+.modal-content .info-grid-pdf div,
+.modal-content .alert-item,
+.modal-content .prediction-summary {
+    color: #2c3e50 !important;
+}
+
+.modal-content .info-grid-pdf div strong,
+.modal-content .info-grid-pdf div span,
+.modal-content .alert-header strong,
+.modal-content .alert-message,
+.modal-content .alert-header small,
+.modal-content .prediction-item,
+.modal-content .prediction-count {
+    color: #2c3e50 !important;
+}
+
+/* Override dark mode styles for report content */
+@media (prefers-color-scheme: dark) {
+    .modal-content .report-section,
+    .modal-content .report-details,
+    .modal-content .info-grid-pdf div,
+    .modal-content .alert-item,
+    .modal-content .prediction-summary,
+    .modal-content .info-grid-pdf div strong,
+    .modal-content .info-grid-pdf div span,
+    .modal-content .alert-header strong,
+    .modal-content .alert-message,
+    .modal-content .alert-header small,
+    .modal-content .prediction-item,
+    .modal-content .prediction-count {
+        color: #2c3e50 !important;
+    }
+}
+
+.dark-mode .modal-content .report-section,
+.dark-mode .modal-content .report-details,
+.dark-mode .modal-content .info-grid-pdf div,
+.dark-mode .modal-content .alert-item,
+.dark-mode .modal-content .prediction-summary,
+.dark-mode .modal-content .info-grid-pdf div strong,
+.dark-mode .modal-content .info-grid-pdf div span,
+.dark-mode .modal-content .alert-header strong,
+.dark-mode .modal-content .alert-message,
+.dark-mode .modal-content .alert-header small,
+.dark-mode .modal-content .prediction-item,
+.dark-mode .modal-content .prediction-count {
+    color: #2c3e50 !important;
+}
+
+/* Keep background colors for better contrast */
+.modal-content .report-section,
+.modal-content .info-grid-pdf div,
+.modal-content .alert-item,
+.modal-content .prediction-summary {
+    background: #ffffff !important;
+}
+
+.modal-content .prediction-summary {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+}
+
+/* Alert item backgrounds */
+.modal-content .alert-critical {
+    background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%) !important;
+}
+
+.modal-content .alert-high {
+    background: linear-gradient(135deg, #fff0e6 0%, #ffe0cc 100%) !important;
+}
+
+.modal-content .alert-medium {
+    background: linear-gradient(135deg, #fff9e6 0%, #fff2cc 100%) !important;
+}
+
+.modal-content .alert-low {
+    background: linear-gradient(135deg, #e6f7ff 0%, #cceeff 100%) !important;
 }
 
 /* Responsive Design for Reports */
@@ -1248,31 +1336,20 @@ body {
 @media (prefers-color-scheme: dark) {
     .modal-content {
         background: #2c3e50;
-        color: #ecf0f1;
     }
     
     .report-section h3 {
         color: #3498db;
     }
-    
-    .info-grid-pdf div {
-        background: #34495e;
-        color: #ecf0f1;
-    }
-    
-    .info-grid-pdf div strong {
-        color: #bdc3c7;
-    }
-    
-    .prediction-summary {
-        background: #34495e;
-        border-color: #4a6572;
-    }
-    
-    .alert-item {
-        background: #34495e;
-        color: #ecf0f1;
-    }
+}
+
+/* Manual dark mode class support for modal */
+.dark-mode .modal-content {
+    background: #2c3e50;
+}
+
+.dark-mode .report-section h3 {
+    color: #3498db;
 }
 
 /* -------------------- THREAT VISUALIZATION -------------------- */

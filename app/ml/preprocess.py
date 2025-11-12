@@ -92,7 +92,7 @@ class Preprocessor:
             
             y = []
             for lbl in y_raw:
-                label_str = str(lbl).strip()  # Don't convert to upper yet
+                label_str = str(lbl).strip()  
                 if label_str in ["BENIGN", "normal", "0"]:
                     y.append("NORMAL")
                 else:

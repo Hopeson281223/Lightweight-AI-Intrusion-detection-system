@@ -128,23 +128,23 @@ def init_db():
         
         if not existing_tables:
             # Fresh install - create all tables
-            print("🆕 Creating new database...")
+            print("Creating new database...")
             conn.executescript(SCHEMA)
             conn.commit()
-            print("✅ Database created successfully")
+            print("Database created successfully")
         else:
             # Existing database - run migrations
             migrate_db(conn, existing_tables)
             
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
+        print(f"Database initialization failed: {e}")
         raise
     finally:
         conn.close()
 
 def migrate_db(conn, existing_tables):
     """Handle database schema migrations for existing databases"""
-    print("🔄 Running database migrations...")
+    print("Running database migrations...")
     
     # Create sessions table if it doesn't exist
     if 'sessions' not in existing_tables:
@@ -159,26 +159,26 @@ def migrate_db(conn, existing_tables):
                 total_alerts INTEGER DEFAULT 0
             )
         """)
-        print("✅ Created sessions table")
+        print("Created sessions table")
     
     # Add session_id to packets table if it doesn't exist
     try:
         conn.execute("ALTER TABLE packets ADD COLUMN session_id TEXT")
-        print("✅ Added session_id to packets table")
+        print("Added session_id to packets table")
     except sqlite3.OperationalError:
         pass  # Column already exists
     
     # Add session_id to predictions table if it doesn't exist
     try:
         conn.execute("ALTER TABLE predictions ADD COLUMN session_id TEXT")
-        print("✅ Added session_id to predictions table")
+        print("Added session_id to predictions table")
     except sqlite3.OperationalError:
         pass  # Column already exists
     
     # Add session_id to alerts table if it doesn't exist
     try:
         conn.execute("ALTER TABLE alerts ADD COLUMN session_id TEXT")
-        print("✅ Added session_id to alerts table")
+        print("Added session_id to alerts table")
     except sqlite3.OperationalError:
         pass  # Column already exists
 
@@ -191,9 +191,9 @@ def migrate_db(conn, existing_tables):
                 end_time = datetime(end_time, 'localtime')
             WHERE start_time LIKE '%-%' AND start_time NOT LIKE '%,%'
         """)
-        print("✅ Fixed existing session timestamps")
+        print("Fixed existing session timestamps")
     except Exception as e:
-        print(f"⚠️ Could not fix existing timestamps: {e}")
+        print(f"Could not fix existing timestamps: {e}")
     
     # Create indexes
     indexes = [
@@ -211,7 +211,7 @@ def migrate_db(conn, existing_tables):
             print(f"⚠️ Could not create index: {e}")
     
     conn.commit()
-    print("✅ Database migrations completed")
+    print("Database migrations completed")
 
 def create_session(session_id, interface=None, start_time=None):
     """Create a new capture session"""
@@ -226,7 +226,7 @@ def create_session(session_id, interface=None, start_time=None):
             (session_id, start_time, interface)
         )
         conn.commit()
-        print(f"💾 Created new session: {session_id} at {start_time}")
+        print(f"Created new session: {session_id} at {start_time}")
         return True
     except sqlite3.IntegrityError:
         print(f"Session {session_id} already exists")
@@ -255,7 +255,7 @@ def end_session(session_id, packet_count=0, prediction_count=0, alert_count=0, s
             (local_time, packet_count, prediction_count, alert_count, session_id)
         )
         conn.commit()
-        print(f"💾 Ended session {session_id} at {local_time}")
+        print(f"Ended session {session_id} at {local_time}")
 
         # Generate report after session ends WITH LIVE LOGS
         save_session_report(session_id, session_logs)
@@ -316,10 +316,10 @@ def save_session_report(session_id, session_logs=None):
         """, (session_id, f"Session Report {session_id}", json.dumps(report_data), local_time))
 
         conn.commit()
-        print(f"📝 Report saved for session {session_id} at {local_time} with {len(session_logs or [])} live logs")
+        print(f"Report saved for session {session_id} at {local_time} with {len(session_logs or [])} live logs")
         return True
     except Exception as e:
-        print(f"❌ Error saving report: {e}")
+        print(f"Error saving report: {e}")
         return False
     finally:
         conn.close()
@@ -410,7 +410,7 @@ def save_model_info(name, dataset, path, size_kb, feature_names=None, label_clas
         # Check if model_type column exists, if not add it
         try:
             conn.execute("ALTER TABLE models ADD COLUMN model_type TEXT")
-            print("✅ Added model_type column to models table")
+            print("Added model_type column to models table")
         except sqlite3.OperationalError:
             pass  # Column already exists
         
@@ -419,7 +419,7 @@ def save_model_info(name, dataset, path, size_kb, feature_names=None, label_clas
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (name, dataset, str(path), size_kb, feature_names_json, label_classes_json, model_type))
         conn.commit()
-        print(f"✅ Model info saved: {name} ({model_type})")
+        print(f"Model info saved: {name} ({model_type})")
     except Exception as e:
         print(f"Error saving model info: {e}")
     finally:

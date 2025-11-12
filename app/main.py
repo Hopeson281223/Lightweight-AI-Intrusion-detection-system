@@ -239,7 +239,6 @@ def get_stats():
         }
         
 # Prediction
-# Prediction
 @app.post("/predict")
 def predict(req: PredictRequest):
     model, meta = load_model(req.dataset, req.model_type)  # Pass model_type here
@@ -504,7 +503,6 @@ def get_report_details(session_id: str):
         raise HTTPException(status_code=404, detail="Report not found")
     
     return json.loads(row["report_data"])
-
 
 @app.get("/reports/{session_id}/download")
 def download_report(session_id: str):

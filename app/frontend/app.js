@@ -369,15 +369,13 @@ class LAIIDSFrontend {
             interfaceName = 'Network Adapter';
         }
 
-        // Format dates properly - handle both ISO format and local format
+        // Format dates properly
         const formatDate = (dateString) => {
             if (!dateString || dateString === 'N/A') return 'N/A';
             try {
-                // If it's already in a readable format, return as is
                 if (dateString.includes(', ')) {
                     return dateString;
                 }
-                // Otherwise parse and format
                 return new Date(dateString).toLocaleString();
             } catch {
                 return dateString;
@@ -385,29 +383,29 @@ class LAIIDSFrontend {
         };
 
         let html = `
-            <div class="report-section">
+            <div class="report-section" style="color: #2c3e50 !important;">
                 <h3 style="color: #3498db; margin-bottom: 15px;">
                     <i class="fas fa-info-circle"></i> Session Information
                 </h3>
-                <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
-                    <div><strong>Interface:</strong> ${interfaceName}</div>
-                    <div><strong>Start Time:</strong> ${formatDate(session.start_time)}</div>
-                    <div><strong>End Time:</strong> ${formatDate(session.end_time)}</div>
-                    <div><strong>Total Packets:</strong> ${session.total_packets || 0}</div>
-                    <div><strong>Total Predictions:</strong> ${session.total_predictions || 0}</div>
-                    <div><strong>Total Alerts:</strong> ${session.total_alerts || 0}</div>
+                <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; color: #2c3e50 !important;">
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Interface:</strong> ${interfaceName}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Start Time:</strong> ${formatDate(session.start_time)}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">End Time:</strong> ${formatDate(session.end_time)}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Packets:</strong> ${session.total_packets || 0}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Predictions:</strong> ${session.total_predictions || 0}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Alerts:</strong> ${session.total_alerts || 0}</div>
                 </div>
             </div>
 
-            <div class="report-section">
+            <div class="report-section" style="color: #2c3e50 !important;">
                 <h3 style="color: #3498db; margin-bottom: 15px;">
                     <i class="fas fa-chart-bar"></i> Prediction Summary
                 </h3>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                <div class="prediction-summary" style="color: #2c3e50 !important;">
                     ${Object.entries(predictions).map(([label, count]) => `
-                        <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee;">
-                            <span style="font-weight: 600; color: ${label === 'ANOMALOUS' ? '#e74c3c' : '#27ae60'}">${label}:</span>
-                            <span>${count}</span>
+                        <div class="prediction-item" style="color: #2c3e50 !important;">
+                            <span class="prediction-label ${label === 'NORMAL' ? 'normal' : 'anomalous'}" style="color: ${label === 'NORMAL' ? '#27ae60' : '#e74c3c'} !important;">${label}:</span>
+                            <span class="prediction-count" style="color: #2c3e50 !important;">${count}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -416,18 +414,18 @@ class LAIIDSFrontend {
 
         if (alerts.length > 0) {
             html += `
-                <div class="report-section">
+                <div class="report-section" style="color: #2c3e50 !important;">
                     <h3 style="color: #3498db; margin-bottom: 15px;">
                         <i class="fas fa-bell"></i> Recent Alerts (${alerts.length})
                     </h3>
-                    <div style="max-height: 200px; overflow-y: auto;">
+                    <div class="alerts-list">
                         ${alerts.map(alert => `
-                            <div style="background: ${this.getAlertColor(alert.severity)}; padding: 10px; margin: 5px 0; border-radius: 6px; border-left: 4px solid ${this.getAlertBorderColor(alert.severity)}">
-                                <div style="display: flex; justify-content: space-between;">
-                                    <strong>${alert.severity}</strong>
-                                    <small>${formatDate(alert.created_at)}</small>
+                            <div class="alert-item alert-${alert.severity?.toLowerCase() || 'medium'}" style="color: #2c3e50 !important;">
+                                <div class="alert-header">
+                                    <strong style="color: #2c3e50 !important;">${alert.severity}</strong>
+                                    <small style="color: #7f8c8d !important;">${formatDate(alert.created_at)}</small>
                                 </div>
-                                <div style="margin-top: 5px;">${alert.message}</div>
+                                <div class="alert-message" style="color: #2c3e50 !important;">${alert.message}</div>
                             </div>
                         `).join('')}
                     </div>
