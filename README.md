@@ -1,13 +1,14 @@
 # LAI-IDS (Lightweight AI Intrusion Detection System)
 
-A minimal, resource-friendly IDS that captures network traffic, extracts features, and classifies activity with a lightweight ML model. Built with **FastAPI** and **scikit-learn**.
+A minimal, resource-friendly IDS that captures network traffic, extracts features, and classifies activity with a lightweight ML model. It also gives reports for the capture sussion. It is built with **FastAPI** and **scikit-learn**.
 
 ## Quickstart
 
 ```bash
 # Create & activate a virtual environment
 python -m venv .venv
-# Windows: .venv\Scripts\activate
+# Windows: 
+.venv\Scripts\activate
 # Linux/Mac:
 source .venv/bin/activate
 
@@ -17,10 +18,5 @@ pip install -r requirements.txt
 # Initialize database
 python scripts/setup_db.py
 
-# Train model
-python -m app.ml.train_DC_model
-python -m app.ml.train_DF_model
-
-# Run API
+# Run API in virtual environment
 uvicorn app.main:app --reload
-# Open: http://127.0.0.1:8000/docs
