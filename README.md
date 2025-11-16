@@ -1,6 +1,6 @@
 # LAI-IDS (Lightweight AI Intrusion Detection System)
 
-A minimal, resource-friendly IDS that captures network traffic, extracts features, and classifies activity with a lightweight ML model. It also gives reports for the capture sussion. It is built with **FastAPI** and **scikit-learn**.
+A minimal, resource-friendly IDS that captures network traffic, extracts features, and classifies activity with a lightweight ML model. It also gives reports for the capture sessions. It is built with **FastAPI** and **scikit-learn**.
 
 ## Quickstart
 
