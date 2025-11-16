@@ -53,7 +53,7 @@ def root():
 def startup_event():
     init_db()
 
-# Request models
+# Prediction request model
 class PredictRequest(BaseModel):
     dataset: str
     features: list[float]
@@ -70,7 +70,7 @@ def load_model(dataset: str, model_type: str = "decision_tree"):
     if cache_key in loaded_models:
         return loaded_models[cache_key], loaded_meta[cache_key]
 
-    # Support both decision_tree and random_forest
+    # Supports both decision_tree and random_forest
     if model_type == "random_forest":
         model_path = MODEL_DIR / f"random_forest_{dataset}_model.joblib"
     else:
@@ -296,7 +296,7 @@ def predict(req: PredictRequest):
         "dst_ip": req.dst_ip or "N/A",
         "protocol": req.protocol or "N/A",
         "message": f"Prediction result: {label} (conf: {prob:.2f})" if prob else f"Prediction result: {label}",
-        "model_type": req.model_type  # Add model type to logs
+        "model_type": req.model_type 
     }
     live_logs.append(json.dumps(log_entry))
 
@@ -327,7 +327,7 @@ async def websocket_logs(websocket: WebSocket):
                     formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
                     
                     packet_capture.session_logs.append({
-                        "timestamp": formatted_time,  # Full date and time
+                        "timestamp": formatted_time,  
                         "src_ip": log_data.get("src_ip", "N/A"),
                         "dst_ip": log_data.get("dst_ip", "N/A"), 
                         "protocol": log_data.get("protocol", "N/A"),
@@ -335,14 +335,14 @@ async def websocket_logs(websocket: WebSocket):
                         "confidence": log_data.get("confidence"),
                         "message": log_data.get("message", log_entry)
                     })
-                    print(f"📝 Added log to session: {formatted_time} - {log_data.get('label', 'UNKNOWN')}")
+                    print(f"Added log to session: {formatted_time} - {log_data.get('label', 'UNKNOWN')}")
                     
                     # Also update the log entry to include date for WebSocket display
                     log_data["timestamp"] = formatted_time
                     await websocket.send_text(json.dumps(log_data))
                     
                 except Exception as e:
-                    print(f"⚠️ Error adding log to session: {e}")
+                    print(f"Error adding log to session: {e}")
                     # Still add raw log if JSON parsing fails
                     current_time = datetime.now()
                     formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -371,10 +371,10 @@ def get_system_info():
         memory = psutil.virtual_memory()
         memory_percent = memory.percent
         
-        # System uptime - FIXED: use timedelta directly, not datetime.timedelta
+        # System uptime 
         boot_time = psutil.boot_time()
         uptime_seconds = time.time() - boot_time
-        uptime_str = str(timedelta(seconds=int(uptime_seconds)))  # ✅ CORRECT
+        uptime_str = str(timedelta(seconds=int(uptime_seconds))) 
         
         return {
             "cpu": round(cpu_percent, 1),
