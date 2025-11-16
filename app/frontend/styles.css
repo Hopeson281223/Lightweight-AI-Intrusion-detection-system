@@ -1193,7 +1193,7 @@ body {
     .modal-content .alert-header small,
     .modal-content .prediction-item,
     .modal-content .prediction-count {
-        color: #2c3e50 !important;
+        color: #1d72c6 !important;
     }
 }
 
@@ -1217,7 +1217,7 @@ body {
 .modal-content .info-grid-pdf div,
 .modal-content .alert-item,
 .modal-content .prediction-summary {
-    background: #ffffff !important;
+    background: #e0dada !important;
 }
 
 .modal-content .prediction-summary {
@@ -1341,6 +1341,16 @@ body {
     .report-section h3 {
         color: #3498db;
     }
+    
+    /* FIX MODAL TITLE COLOR FOR DARK MODE */
+    .modal-content h2#modalTitle {
+        color: #e0dada !important;
+    }
+    
+    .modal-content h2,
+    .modal-content h3 {
+        color: #3498db !important;
+    }
 }
 
 /* Manual dark mode class support for modal */
@@ -1350,6 +1360,13 @@ body {
 
 .dark-mode .report-section h3 {
     color: #3498db;
+}
+
+/* FIX MODAL TITLE COLOR FOR MANUAL DARK MODE */
+.dark-mode .modal-content h2#modalTitle,
+.dark-mode .modal-content h2,
+.dark-mode .modal-content h3 {
+    color: #3498db !important;
 }
 
 /* THREAT VISUALIZATION */

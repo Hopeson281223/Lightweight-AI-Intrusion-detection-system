@@ -20,7 +20,7 @@ class LivePacketCapture:
         self.packet_count = 0
         self.current_interface = r"\Device\NPF_{662136C5-DAF0-45FA-AFF8-1889200C99C2}"
         self.last_error = None
-
+        self.current_model = "random_forest"
         # For session tracking
         self.session_id = None
         self.session_start_time = None
@@ -44,6 +44,9 @@ class LivePacketCapture:
             "act_data_pkt_fwd": 0
         })
         self.MAX_FLOW_AGE = 5 
+
+        # Add stop event for forceful termination
+        self.stop_event = threading.Event()
 
     def list_available_interfaces(self):
         """Return all usable network interfaces with proper active status."""
@@ -237,7 +240,7 @@ class LivePacketCapture:
                     "src_ip": src_ip,
                     "dst_ip": dst_ip,
                     "protocol": protocol,
-                    "model_type": "random_forest"  # Use Random Forest for better accuracy
+                    "model_type": self.current_model  
                 },
                 timeout=3
             )
@@ -270,7 +273,7 @@ class LivePacketCapture:
                 conn.commit()
                 conn.close()
                 
-                # Add to session logs with local time
+                # Add to session logs with local time 
                 log_entry = {
                     "timestamp": local_time,
                     "src_ip": src_ip,
@@ -279,15 +282,17 @@ class LivePacketCapture:
                     "label": result["label"],
                     "confidence": result["confidence"],
                     "message": f"Prediction: {result['label']} (conf: {result['confidence']:.2f})",
-                    "model_type": "random_forest"  
+                    "model_type": self.current_model  
                 }
                 self.session_logs.append(log_entry)
                 
-                print(f"{src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f}) [RF]")
+                # FIX: Show which model was used in the log
+                model_abbr = "RF" if self.current_model == "random_forest" else "DT"
+                print(f"{src_ip} → {dst_ip} | {protocol} | {result['label']} (conf: {result['confidence']:.2f}) [{model_abbr}]")
                     
         except Exception as e:
             print(f"Prediction error: {e}")
-                            
+                                
     def packet_handler(self, packet):
         """Process each packet and add to flows"""
         try:
@@ -335,24 +340,12 @@ class LivePacketCapture:
         except Exception as e:
             print(f"Packet handler error: {e}")
     
-    def _capture_loop(self):
-        """Main capture loop"""
-        print(f"Starting FLOW-BASED capture on {self.current_interface}")
-        try:
-            sniff(
-                iface=self.current_interface,
-                prn=self.packet_handler,
-                store=False,
-                filter="ip",
-                stop_filter=lambda x: not self.is_capturing
-            )
-        except Exception as e:
-            print(f"Capture error: {e}")
-
-    def start_capture(self, interface=None):
+    def start_capture(self, interface=None, model_type="random_forest"):
         if self.is_capturing:
             self.last_error = "Capture already running"
             return False
+
+        self.current_model = model_type  
 
         # Auto-select first active interface if none provided
         if not interface or interface == "auto":
@@ -368,16 +361,16 @@ class LivePacketCapture:
         else:
             self.current_interface = interface
 
-        #create new session
+        # Create new session
         self.session_id = f"session_{int(time.time())}_{self.packet_count}"
         self.session_start_time = datetime.now().isoformat()
         self.prediction_count = 0
         self.alert_count = 0
         self.session_logs = []  # Reset logs for new session
         
-        # Create session in database with start time
-        if create_session(self.session_id, self.current_interface, self.session_start_time):
-            print(f"New capture session started: {self.session_id} at {self.session_start_time}")
+        # Create session in database with start time AND model
+        if create_session(self.session_id, self.current_interface, self.session_start_time, self.current_model):
+            print(f"New capture session started: {self.session_id} at {self.session_start_time} with model: {self.current_model}")
         else:
             print("Could not create session in database, but capture will continue")
         
@@ -386,52 +379,88 @@ class LivePacketCapture:
         self.flows.clear()
         self.last_error = None
 
-        # Launch capture in background thread
-        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        # Launch capture in background thread - MAKE SURE METHOD NAME IS CORRECT
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)  # Use correct method name
         self.capture_thread.start()
 
-        print(f"Flow-based packet capture started on {self.current_interface}")
+        print(f"Flow-based packet capture started on {self.current_interface} using {self.current_model}")
         return True
     
     def stop_capture(self):
+        print(f"stop_capture called - is_capturing: {self.is_capturing}, session_id: {self.session_id}")
+        
         if not self.is_capturing:
             self.last_error = "No capture running"
+            print(f"Stop failed: {self.last_error}")
             return False
             
-        self.is_capturing = False
-        self.last_error = None
+        print("Stopping capture immediately...")
         
-        print("Stopping capture immediately (fast mode)...")
-        
-        flows_count = len(self.flows)
-        self.flows.clear()
-        
-        # end session and save logs
-        if self.session_id:
-            # Get all session logs before ending session
-            session_logs = self.session_logs.copy()
+        try:
+            # Set capturing to False immediately
+            self.is_capturing = False
+            self.last_error = None
             
-            # Makes sure we import end_session if not already imported
+            # Store session data for later processing
+            final_session_id = self.session_id
+            final_packet_count = self.packet_count
+            final_prediction_count = self.prediction_count
+            final_alert_count = self.alert_count
+            final_logs = self.session_logs.copy()
+            
+            print(f"Session data saved: {final_session_id} with {final_packet_count} packets")
+            
+            # Don't flush old flows here - it takes too long and continues processing
+            # Instead, just clear the flows without processing them
+            print("Clearing flows without processing...")
+            flows_count = len(self.flows)
+            self.flows.clear()
+            print(f"Cleared {flows_count} flows")
+            
+            # Save session to database (this is fast)
+            print("Saving session to database...")
             from app.storage.db import end_session
-            
-            if end_session(self.session_id, self.packet_count, self.prediction_count, self.alert_count, session_logs):
-                print(f"Session {self.session_id} saved to database with {len(session_logs)} logs")
+            success = end_session(final_session_id, final_packet_count, final_prediction_count, final_alert_count, final_logs)
+            if success:
+                print(f"Session {final_session_id} saved to database")
             else:
                 print("Could not save session to database")
             
-            # Reset session tracking
-            self.session_id = None
-            self.session_start_time = None
-            self.prediction_count = 0
-            self.alert_count = 0
-            self.session_logs = []  # Clear logs after session end
-        
-        if self.capture_thread:
-            self.capture_thread.join(timeout=2.0)
-        
-        print(f"Capture stopped. Total packets: {self.packet_count}, Flows cleared: {flows_count}")
-        return True
-
+            # Stop the capture thread with timeout
+            if self.capture_thread and self.capture_thread.is_alive():
+                print("Stopping capture thread...")
+                self.capture_thread.join(timeout=1.0)
+                if self.capture_thread.is_alive():
+                    print("Capture thread still running, but returning success")
+                else:
+                    print("Capture thread stopped")
+            
+            print(f"Capture stopped completely. Packets: {final_packet_count}, Predictions: {final_prediction_count}")
+            return True
+            
+        except Exception as e:
+            print(f"ERROR in stop_capture: {e}")
+            import traceback
+            traceback.print_exc()
+            self.last_error = str(e)
+            return False
+    
+    def _capture_loop(self):
+        """Main capture loop"""
+        print(f"Starting FLOW-BASED capture on {self.current_interface}")
+        try:
+            sniff(
+                iface=self.current_interface,
+                prn=self.packet_handler,
+                store=False,
+                filter="ip",
+                stop_filter=lambda x: not self.is_capturing
+            )
+        except Exception as e:
+            print(f"Capture error: {e}")
+        finally:
+            print("Capture loop ended")
+            
     def get_status(self):
         return {
             "is_capturing": self.is_capturing,
@@ -441,7 +470,8 @@ class LivePacketCapture:
             "session_id": self.session_id,
             "predictions_count": self.prediction_count,
             "alerts_count": self.alert_count,
-            "logs_count": len(self.session_logs)  
+            "logs_count": len(self.session_logs),
+            "current_model": self.current_model 
         }
 
 packet_capture = LivePacketCapture()

@@ -358,16 +358,58 @@ class LAIIDSFrontend {
         firstElement.focus();
     }
 
+    formatInterfaceName(interfaceName) {
+        /** Convert raw interface name to user-friendly format */
+        if (!interfaceName || interfaceName === "Unknown Interface") {
+            return "Not Specified";
+        }
+        
+        // Map of device GUIDs to their actual names from your system
+        const interfaceMapping = {
+            'B45B858F-332B-4B73-BD88-78A970DA5CA8': 'Ethernet 2',
+            '99D899F9-FC26-11EE-B272-806E6F6E6963': 'Loopback',
+            '38B644DD-945C-4322-A099-2CBDB55C682B': 'Wi-Fi',
+            '07374750-E68B-490E-9330-9FD785CD71B6': '6to4 Adapter',
+            '9830E727-F5F6-4CF9-B731-2448C890CD2B': 'Bluetooth',
+            '8D342B22-886E-4332-A4D1-06EE75FCF9D1': 'USB Ethernet',
+            'B9A4468E-586B-4B7D-9CF6-2A500407E66F': 'Kernel Debugger',
+            '9B9A36D7-2119-11F0-B321-50EB71026F15': 'Ethernet 2 (Npcap)',
+            'BA72FB83-BBEC-49CA-93CB-E05DDED0E27D': 'RAS Adapter',
+            '2EE2C70C-A092-4D88-A654-98C8D7645CD5': 'IP-HTTPS',
+            '93123211-9629-4E04-82F0-EA2E4F221468': 'Teredo',
+            '3EE5C085-E9EF-11EF-B30B-50EB71026F15': 'Wi-Fi (Npcap)'
+        };
+        
+        // If it's already a friendly name, return it as-is
+        // Check if it's NOT a device path (doesn't start with \Device\NPF_)
+        if (!interfaceName.startsWith('\\Device\\NPF_')) {
+            return interfaceName; 
+        }
+        
+        // Extract GUID from Windows device path
+        if (interfaceName.startsWith('\\Device\\NPF_')) {
+            const guidMatch = interfaceName.match(/\{([A-F0-9-]+)\}/);
+            if (guidMatch) {
+                const guid = guidMatch[1];
+                return interfaceMapping[guid] || 'Network Adapter';
+            }
+        }
+        
+        return interfaceName;
+    }
+
     formatReportForDisplay(reportData) {
         const session = reportData.session || {};
         const predictions = reportData.predictions || {};
         const alerts = reportData.alerts || [];
 
-        // Clean up interface name for display
+        // Use formatted interface name
         let interfaceName = session.interface || 'N/A';
-        if (interfaceName.includes('\\Device\\NPF_')) {
-            interfaceName = 'Network Adapter';
-        }
+        interfaceName = this.formatInterfaceName(interfaceName);
+
+        // Get model information from session data
+        const modelUsed = session.model_used || 'random_forest';
+        const modelDisplayName = modelUsed === 'random_forest' ? 'Random Forest' : 'Decision Tree';
 
         // Format dates properly
         const formatDate = (dateString) => {
@@ -394,6 +436,7 @@ class LAIIDSFrontend {
                     <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Packets:</strong> ${session.total_packets || 0}</div>
                     <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Predictions:</strong> ${session.total_predictions || 0}</div>
                     <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">Total Alerts:</strong> ${session.total_alerts || 0}</div>
+                    <div style="color: #2c3e50 !important;"><strong style="color: #2c3e50 !important;">ML Model Used:</strong> ${modelDisplayName}</div>
                 </div>
             </div>
 
@@ -599,13 +642,29 @@ class LAIIDSFrontend {
     async updateSystemInfo() {
         try {
             const res = await this.apiCall("/system");
+            
+            // Application-specific metrics
             document.getElementById("cpuUsage").textContent = `${res.cpu}%`;
             document.getElementById("memUsage").textContent = `${res.memory}%`;
+            
+            // Add memory in MB if the element exists
+            const memoryMBElement = document.getElementById("memoryMB");
+            if (memoryMBElement && res.memory_mb) {
+                memoryMBElement.textContent = `${res.memory_mb} MB`;
+            }
+            
             document.getElementById("systemUptime").textContent = res.uptime || "--";
+            
         } catch {
+            // Fallback values
             document.getElementById("cpuUsage").textContent = "N/A";
             document.getElementById("memUsage").textContent = "N/A";
             document.getElementById("systemUptime").textContent = "--";
+            
+            const memoryMBElement = document.getElementById("memoryMB");
+            if (memoryMBElement) {
+                memoryMBElement.textContent = "N/A";
+            }
         }
     }
 
@@ -676,13 +735,15 @@ class LAIIDSFrontend {
                     const opt = document.createElement('option');
                     opt.value = iface.device;
                     
+                    const formattedName = this.formatInterfaceName(iface.name);
+                
                     // Add active indicator to the option text
                     const activeIndicator = iface.active ? '🟢 ACTIVE - ' : '⚫ ';
-                    opt.textContent = `${activeIndicator}${iface.name} — ${iface.description}`;
+                    opt.textContent = `${activeIndicator}${formattedName} — ${iface.description}`;
                     
                     // Add data attribute for styling
                     opt.dataset.active = iface.active;
-                    
+                        
                     select.appendChild(opt);
 
                     // Track the first active interface for auto-selection
@@ -804,7 +865,7 @@ class LAIIDSFrontend {
         }
 
         try {
-            await this.apiCall(`/start?interface=${encodeURIComponent(iface)}`, 'POST');
+            await this.apiCall(`/start?interface=${encodeURIComponent(iface)}&model_type=${encodeURIComponent(modelType)}`, 'POST');
             this.isCapturing = true;
             this.log(`Started capturing on interface: ${iface} using ${modelType.toUpperCase()} model`, 'success');
             this.updateSystemStatus(true);
@@ -832,16 +893,30 @@ class LAIIDSFrontend {
         try {
             const stats = await this.apiCall('/stats');
             const cs = stats.capture_status || {};
+            
+            console.log('Stats update:', {
+                sessionId: stats.session_id,
+                isCapturing: cs.is_capturing,
+                threatData: stats.threat_distribution
+            });
 
             document.getElementById('packetsCaptured').textContent = cs.packets_captured || 0;
             document.getElementById('activeFlows').textContent = cs.active_flows || 0;
             document.getElementById('captureUptime').textContent = cs.uptime || '--';
             document.getElementById('captureStatus').textContent = cs.is_capturing ? 'Running' : 'Stopped';
-            document.getElementById('currentInterface').textContent = cs.interface || '--';
+        
+            const interfaceName = cs.interface || '--';
+            const formattedInterfaceName = this.formatInterfaceName(interfaceName);
+            document.getElementById('currentInterface').textContent = formattedInterfaceName;
 
             console.log('Raw threat distribution:', stats.threat_distribution);
 
             this.updateThreatChart(stats.threat_distribution || {});
+            
+            // Add session info to help debugging
+            if (stats.session_id) {
+                console.log(`Showing data for session: ${stats.session_id}`);
+            }
             
         } catch (err) {
             this.log(`Error fetching stats: ${err}`, 'error');
@@ -1039,7 +1114,7 @@ class LAIIDSFrontend {
         console.log('Threat chart initialized in "no data" state');
     }
 
-    updateThreatChart(dist) {
+    updateThreatChart(dist, sessionInfo = '') {
         if (!this.chart) {
             console.warn('Chart not initialized');
             return;
@@ -1117,11 +1192,11 @@ class LAIIDSFrontend {
         
         if (!interfaceToCheck || interfaceToCheck === 'Loading...' || select.options.length === 0) {
             // No interface selected or still loading
-            // Update status display
-            statusElement.className = `interface-status ${isActive ? 'active' : 'inactive'}`;
+            // Update status display - COMPLETELY REMOVE isActive references
+            statusElement.className = 'interface-status inactive';
             statusElement.innerHTML = `
-                <span class="status-dot ${isActive ? 'active' : 'inactive'}"></span>
-                <span class="status-text">${isActive ? 'ACTIVE' : 'INACTIVE'}</span>
+                <span class="status-dot inactive"></span>
+                <span class="status-text">NO INTERFACE</span>
             `;
             statusElement.style.display = 'flex';
             currentInterfaceSpan.textContent = '--';

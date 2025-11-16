@@ -11,6 +11,7 @@ from app.packet_capture.packet_capture import packet_capture
 from datetime import datetime, timedelta
 from collections import deque
 import io
+import re
 import json
 import psutil
 import time
@@ -20,6 +21,51 @@ import numpy as np
 import asyncio
 from app.storage.db import init_db, get_db, get_current_session_stats, get_recent_sessions
 from app.ml.preprocess import LIVE_FEATURES, pd
+
+class SystemMonitor:
+    def __init__(self):
+        self.app_start_time = time.time()
+        self.process = psutil.Process()
+        
+    def get_app_cpu_usage(self):
+        """Get CPU usage for this specific process"""
+        try:
+            return self.process.cpu_percent(interval=0.1)
+        except:
+            return 0
+    
+    def get_app_memory_usage(self):
+        """Get memory usage for this specific process"""
+        try:
+            memory_info = self.process.memory_info()
+            return memory_info.rss / (1024 * 1024)  # Convert to MB
+        except:
+            return 0
+    
+    def get_app_memory_percent(self):
+        """Get memory usage as percentage of total system memory"""
+        try:
+            return self.process.memory_percent()
+        except:
+            return 0
+    
+    def get_app_uptime(self):
+        """Get application uptime"""
+        uptime_seconds = time.time() - self.app_start_time
+        return self.format_uptime(uptime_seconds)
+    
+    def format_uptime(self, seconds):
+        """Format uptime to human readable format"""
+        days = seconds // (24 * 3600)
+        seconds = seconds % (24 * 3600)
+        hours = seconds // 3600
+        seconds %= 3600
+        minutes = seconds // 60
+        seconds %= 60
+        return f"{int(days)} days, {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+
+# Initialize the monitor
+system_monitor = SystemMonitor()
 
 # Directories
 MODEL_DIR = Path("models")
@@ -100,18 +146,22 @@ def health_check():
 
 # Capture
 @app.post("/start")
-def start_capture(interface: str = None):
+def start_capture(interface: str = None, model_type: str = "random_forest"):  
     """Start live packet capture on specific interface"""
     if interface:
-        success = packet_capture.start_capture(interface)
+        success = packet_capture.start_capture(interface, model_type)  # PASS model_type
     else:
-        success = packet_capture.start_capture()
+        success = packet_capture.start_capture(model_type=model_type)  # PASS model_type
     
     if success:
-        return {"status": "capture_started", "interface": packet_capture.current_interface}
+        return {
+            "status": "capture_started", 
+            "interface": packet_capture.current_interface,
+            "model_used": model_type  
+        }
     else:
         raise HTTPException(status_code=500, detail=packet_capture.last_error or "Failed to start capture")
-
+    
 @app.post("/stop")
 def stop_capture():
     """Stop live packet capture"""
@@ -164,70 +214,65 @@ def set_interface(interface_name: str):
 # stats
 @app.get("/stats")
 def get_stats():
-    """Get system statistics - SESSION BASED"""
+    """Get system statistics - SESSION BASED with proper current session handling"""
     try:
         # Get current session info from packet capture
         capture_status = packet_capture.get_status()
         current_session_id = capture_status.get("session_id")
+        is_capturing = capture_status.get("is_capturing", False)
         
-        # Use session-based stats if available
-        if current_session_id and capture_status.get("is_capturing"):
-            from app.storage.db import get_current_session_stats
+        print(f"Stats request - Session: {current_session_id}, Capturing: {is_capturing}")
+        
+        # If we have a current session (even if not capturing), use its data
+        if current_session_id:
             session_stats = get_current_session_stats(current_session_id)
+            
+            # If session exists in database, use its data
+            if session_stats["session_info"]:
+                return {
+                    "threat_distribution": session_stats["threat_distribution"],
+                    "recent_alerts": session_stats["recent_alerts"],
+                    "capture_status": capture_status,
+                    "session_id": current_session_id,
+                    "session_based": True
+                }
+        
+        # Fallback: Get the most recently ended session
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Get the most recent session (regardless of status)
+        cur.execute("""
+            SELECT id FROM sessions 
+            ORDER BY start_time DESC 
+            LIMIT 1
+        """)
+        recent_session = cur.fetchone()
+        
+        if recent_session:
+            recent_session_id = recent_session[0]
+            session_stats = get_current_session_stats(recent_session_id)
+            
+            # Update capture status to reflect we're showing recent session, not current
+            capture_status["is_capturing"] = False
+            capture_status["session_id"] = recent_session_id
             
             return {
                 "threat_distribution": session_stats["threat_distribution"],
                 "recent_alerts": session_stats["recent_alerts"],
                 "capture_status": capture_status,
-                "session_id": current_session_id,
-                "session_based": True  # Flag to indicate session-based data
+                "session_id": recent_session_id,
+                "session_based": True
             }
-        else:
-            # Fallback to recent session or all-time data
-            conn = get_db()
-            cur = conn.cursor()
-            
-            # Get most recent session's threat distribution
-            cur.execute("""
-                SELECT label, COUNT(*) as count 
-                FROM predictions 
-                WHERE session_id = (
-                    SELECT id FROM sessions 
-                    ORDER BY start_time DESC 
-                    LIMIT 1
-                )
-                GROUP BY label
-            """)
-            threat_rows = cur.fetchall()
-            threat_distribution = {row[0]: row[1] for row in threat_rows} if threat_rows else {}
-            
-            # Get recent alerts
-            cur.execute("""
-                SELECT a.severity, a.message, a.created_at, p.label 
-                FROM alerts a
-                JOIN predictions p ON a.prediction_id = p.id
-                ORDER BY a.created_at DESC 
-                LIMIT 10
-            """)
-            alert_rows = cur.fetchall()
-            recent_alerts = [
-                {
-                    "severity": row[0],
-                    "message": row[1], 
-                    "timestamp": row[2],
-                    "label": row[3]
-                }
-                for row in alert_rows
-            ]
-            
-            conn.close()
-            
-            return {
-                "threat_distribution": threat_distribution,
-                "recent_alerts": recent_alerts,
-                "capture_status": capture_status,
-                "session_based": False  # Flag to indicate fallback data
-            }
+        
+        # Final fallback - no sessions at all
+        conn.close()
+        return {
+            "threat_distribution": {},
+            "recent_alerts": [],
+            "capture_status": capture_status,
+            "session_based": False
+        }
         
     except Exception as e:
         print(f"Error getting stats: {e}")
@@ -236,7 +281,7 @@ def get_stats():
             "recent_alerts": [],
             "capture_status": packet_capture.get_status(),
             "error": str(e)
-        }
+        } 
         
 # Prediction
 @app.post("/predict")
@@ -362,34 +407,46 @@ def get_packets():
 
 @app.get("/system")
 def get_system_info():
-    """Get system information (CPU, memory, uptime)"""
+    """Get LAI-IDS application specific system information"""
     try:
-        # CPU usage
-        cpu_percent = psutil.cpu_percent(interval=1)
+        # Application-specific metrics
+        app_cpu = round(system_monitor.get_app_cpu_usage(), 1)
+        app_memory_percent = round(system_monitor.get_app_memory_percent(), 1)
+        app_memory_mb = round(system_monitor.get_app_memory_usage(), 1)
+        app_uptime = system_monitor.get_app_uptime()
         
-        # Memory usage
-        memory = psutil.virtual_memory()
-        memory_percent = memory.percent
-        
-        # System uptime 
-        boot_time = psutil.boot_time()
-        uptime_seconds = time.time() - boot_time
-        uptime_str = str(timedelta(seconds=int(uptime_seconds))) 
+        # System-wide metrics for comparison (optional)
+        system_cpu = round(psutil.cpu_percent(interval=0.1), 1)
+        system_memory = psutil.virtual_memory()
+        system_memory_percent = round(system_memory.percent, 1)
         
         return {
-            "cpu": round(cpu_percent, 1),
-            "memory": round(memory_percent, 1),
-            "uptime": uptime_str
+            # Application metrics
+            'cpu': app_cpu,
+            'memory': app_memory_percent,
+            'memory_mb': app_memory_mb,
+            'uptime': app_uptime,
+            'version': '0.1.0',
+            
+            # System metrics for comparison (optional)
+            'system_cpu': system_cpu,
+            'system_memory': system_memory_percent,
+            'total_memory_gb': round(system_memory.total / (1024**3), 1)
         }
     except Exception as e:
         print(f"Error getting system info: {e}")
         # Fallback data
         return {
-            "cpu": 15.5,
-            "memory": 42.8,
-            "uptime": "01:30:45"
+            'cpu': 0,
+            'memory': 0,
+            'memory_mb': 0,
+            'uptime': 'N/A',
+            'version': '0.1.0',
+            'system_cpu': 0,
+            'system_memory': 0,
+            'total_memory_gb': 0
         }
-    
+      
 @app.get("/metrics")
 def get_metrics():
     conn = get_db()
@@ -542,44 +599,46 @@ def download_report(session_id: str):
     elements.append(Paragraph(f"LAI-IDS Session Report: {session_id}", styles["Title"]))
     elements.append(Spacer(1, 12))
 
-    # Session info - IMPROVED: Better interface name formatting
+    # Session info with better interface name formatting
     elements.append(Paragraph("<b>Session Information</b>", styles["Heading2"]))
     
     # Format interface name properly
     interface_name = session.get("interface", "Unknown Interface")
-    
+
+    # Get model information from session
+    model_used = session.get("model_used", "random_forest")
+    model_display_name = "Random Forest" if model_used == "random_forest" else "Decision Tree"
+        
     # Clean up interface name for display
     def format_interface_name(interface):
         """Convert raw interface name to user-friendly format"""
         if not interface or interface == "Unknown Interface":
             return "Not Specified"
         
-        # Remove Windows device prefix if present
-        if interface.startswith(r'\Device\NPF_'):
-            # Try to extract a meaningful name
-            if 'Ethernet' in interface:
-                return 'Ethernet Adapter'
-            elif 'Wi-Fi' in interface or 'Wireless' in interface:
-                return 'Wi-Fi Adapter'
-            elif 'Local Area Connection' in interface:
-                return 'Local Area Connection'
-            else:
-                return 'Network Adapter'
-        
-        # For Linux/macOS interface names
+        # Map of device GUIDs to their actual names from your system
         interface_mapping = {
-            'eth0': 'Ethernet (eth0)',
-            'eth1': 'Ethernet (eth1)', 
-            'wlan0': 'Wi-Fi (wlan0)',
-            'wlan1': 'Wi-Fi (wlan1)',
-            'en0': 'Ethernet (en0)',
-            'en1': 'Wi-Fi (en1)',
-            'lo': 'Loopback',
-            'any': 'All Interfaces'
+            'B45B858F-332B-4B73-BD88-78A970DA5CA8': 'Ethernet 2',
+            '99D899F9-FC26-11EE-B272-806E6F6E6963': 'Loopback',
+            '38B644DD-945C-4322-A099-2CBDB55C682B': 'Wi-Fi',
+            '07374750-E68B-490E-9330-9FD785CD71B6': '6to4 Adapter',
+            '9830E727-F5F6-4CF9-B731-2448C890CD2B': 'Bluetooth',
+            '8D342B22-886E-4332-A4D1-06EE75FCF9D1': 'USB Ethernet',
+            'B9A4468E-586B-4B7D-9CF6-2A500407E66F': 'Kernel Debugger',
+            '9B9A36D7-2119-11F0-B321-50EB71026F15': 'Ethernet 2 (Npcap)',
+            'BA72FB83-BBEC-49CA-93CB-E05DDED0E27D': 'RAS Adapter',
+            '2EE2C70C-A092-4D88-A654-98C8D7645CD5': 'IP-HTTPS',
+            '93123211-9629-4E04-82F0-EA2E4F221468': 'Teredo',
+            '3EE5C085-E9EF-11EF-B30B-50EB71026F15': 'Wi-Fi (Npcap)'
         }
         
-        return interface_mapping.get(interface, interface)
-    
+        # Extract GUID from Windows device path
+        if interface.startswith(r'\Device\NPF_'):
+            guid_match = re.search(r'\{([A-F0-9-]+)\}', interface)
+            if guid_match:
+                guid = guid_match.group(1)
+                return interface_mapping.get(guid, 'Network Adapter')
+        
+        return interface
     formatted_interface = format_interface_name(interface_name)
     
     # Format dates properly
@@ -600,6 +659,7 @@ def download_report(session_id: str):
     info_data = [
         ["Session ID", session_id],
         ["Network Interface", formatted_interface],
+        ["ML Model Used", model_display_name],
         ["Start Time", format_date(session.get("start_time"))],
         ["End Time", format_date(session.get("end_time"))],
         ["Total Packets", str(session.get("total_packets", 0))],
@@ -612,9 +672,10 @@ def download_report(session_id: str):
     info_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495e")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("BACKGROUND", (0, 2), (-1, 2), colors.whitesmoke),
-        ("BACKGROUND", (0, 4), (-1, 4), colors.whitesmoke),
-        ("BACKGROUND", (0, 6), (-1, 6), colors.whitesmoke),
+        ("BACKGROUND", (0, 2), (-1, 2), colors.whitesmoke),  # ML Model row
+        ("BACKGROUND", (0, 4), (-1, 4), colors.whitesmoke),  # Start Time row
+        ("BACKGROUND", (0, 6), (-1, 6), colors.whitesmoke),  # Total Packets row
+        ("BACKGROUND", (0, 8), (-1, 8), colors.whitesmoke),  # Capture Status row
         ("BOX", (0, 0), (-1, -1), 1, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("PADDING", (0, 0), (-1, -1), 6),
@@ -786,3 +847,18 @@ def download_report(session_id: str):
         print(f"PDF generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
     
+@app.get("/debug/sessions")
+def debug_sessions():
+    """Debug endpoint to see all sessions"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, start_time, end_time, total_predictions FROM sessions ORDER BY start_time DESC LIMIT 5")
+    sessions = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    
+    current_session = packet_capture.get_status()
+    
+    return {
+        "current_session": current_session,
+        "recent_sessions": sessions
+    }

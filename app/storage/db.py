@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     interface TEXT,
     total_packets INTEGER DEFAULT 0,
     total_predictions INTEGER DEFAULT 0,
-    total_alerts INTEGER DEFAULT 0
+    total_alerts INTEGER DEFAULT 0,
+    model_used TEXT DEFAULT 'random_forest'
 );
 
 -- Packets table with session tracking
@@ -194,6 +195,12 @@ def migrate_db(conn, existing_tables):
         print("Fixed existing session timestamps")
     except Exception as e:
         print(f"Could not fix existing timestamps: {e}")
+
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN model_used TEXT DEFAULT 'random_forest'")
+        print("Added model_used column to sessions table")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     
     # Create indexes
     indexes = [
@@ -213,20 +220,24 @@ def migrate_db(conn, existing_tables):
     conn.commit()
     print("Database migrations completed")
 
-def create_session(session_id, interface=None, start_time=None):
+def create_session(session_id, interface=None, start_time=None, model_used='random_forest'):
     """Create a new capture session"""
     conn = get_db()
     try:
         # Use provided start_time or current local time
         if start_time is None:
+            # Use formatted local time instead of ISO format
+            from datetime import datetime
             start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        print(f"Creating session with time: {start_time}")
+        
         conn.execute(
-            "INSERT INTO sessions (id, start_time, interface) VALUES (?, ?, ?)",
-            (session_id, start_time, interface)
+            "INSERT INTO sessions (id, start_time, interface, model_used) VALUES (?, ?, ?, ?)",
+            (session_id, start_time, interface, model_used)
         )
         conn.commit()
-        print(f"Created new session: {session_id} at {start_time}")
+        print(f"Created new session: {session_id} at {start_time} with model: {model_used}")
         return True
     except sqlite3.IntegrityError:
         print(f"Session {session_id} already exists")
@@ -239,12 +250,13 @@ def create_session(session_id, interface=None, start_time=None):
 
 def end_session(session_id, packet_count=0, prediction_count=0, alert_count=0, session_logs=None):
     """End a capture session and update statistics"""
+    print(f"end_session called for {session_id}")
     conn = get_db()
     try:
         # Use local time in the same format as start time
         from datetime import datetime
         local_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+        print(f"Updating session {session_id} in database...")
         conn.execute(
             """UPDATE sessions 
                SET end_time = ?, 
@@ -258,11 +270,14 @@ def end_session(session_id, packet_count=0, prediction_count=0, alert_count=0, s
         print(f"Ended session {session_id} at {local_time}")
 
         # Generate report after session ends WITH LIVE LOGS
+        print("Generating session report...")
         save_session_report(session_id, session_logs)
 
         return True
     except Exception as e:
         print(f"Error ending session: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         conn.close()
