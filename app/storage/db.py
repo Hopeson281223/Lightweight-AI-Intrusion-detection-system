@@ -183,7 +183,7 @@ def migrate_db(conn, existing_tables):
         pass  # Column already exists
 
     try:
-        # This will update any existing sessions that have UTC timestamps
+        # This updates any existing sessions that have UTC timestamps
         # to use the same format as new local timestamps
         conn.execute("""
             UPDATE sessions 
@@ -208,7 +208,7 @@ def migrate_db(conn, existing_tables):
         try:
             conn.execute(index_sql)
         except Exception as e:
-            print(f"⚠️ Could not create index: {e}")
+            print(f"Could not create index: {e}")
     
     conn.commit()
     print("Database migrations completed")
