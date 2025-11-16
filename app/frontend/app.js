@@ -987,7 +987,7 @@ class LAIIDSFrontend {
 
     //  Update the displayed model info based on selection
     updateCurrentModelInfo(selectedModelType) {
-        console.log(`🔄 Updating model info for: ${selectedModelType}`);
+        console.log(`Updating model info for: ${selectedModelType}`);
         
         // Get the model data from our stored models
         const selectedModel = this.getModelByType(selectedModelType);
