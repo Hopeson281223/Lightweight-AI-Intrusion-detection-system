@@ -1,4 +1,4 @@
-/* -------------------- RESET & BASE STYLES -------------------- */
+/* BASE STYLES */
 * {
     margin: 0;
     padding: 0;
@@ -22,7 +22,7 @@
     --tab-active: #e3f2fd;
 }
 
-/* -------------------- BODY & CONTAINER -------------------- */
+/* BODY & CONTAINER */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
@@ -36,7 +36,7 @@ body {
     margin: 0 auto;
 }
 
-/* -------------------- CARD STYLES -------------------- */
+/* CARD STYLES */
 .card {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 12px;
@@ -58,7 +58,7 @@ body {
     color: var(--primary-color);
 }
 
-/* -------------------- HEADER -------------------- */
+/* HEADER */
 .header {
     background: rgba(255, 255, 255, 0.95);
     padding: 25px;
@@ -106,13 +106,13 @@ body {
     background: #95a5a6;
 }
 
-/* FIXED: Status indicator colors */
+/* Status indicator colors */
 .status-dot.connecting { background: var(--warning-color); }
 .status-dot.connected { background: var(--success-color); }
 .status-dot.error { background: var(--danger-color); }
 .status-dot.stopped { background: #95a5a6; }
 
-/* -------------------- COMPACT CONTROL PANEL -------------------- */
+/* COMPACT CONTROL PANEL */
 .control-panel {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 10px;
@@ -290,7 +290,7 @@ body {
     100% { transform: scale(1); opacity: 1; }
 }
 
-/* ===== COMPACT MODEL SELECTOR STYLES ===== */
+/* COMPACT MODEL SELECTOR STYLES */
 .model-selector {
     display: flex;
     align-items: center;
@@ -419,7 +419,7 @@ body {
     }
 }
 
-/* -------------------- NAVBAR STYLES -------------------- */
+/* NAVBAR STYLES */
 .navbar {
     background: var(--nav-bg);
     border-radius: 12px;
@@ -571,7 +571,7 @@ body {
     100% { transform: scale(1); }
 }
 
-/* -------------------- TAB CONTENT -------------------- */
+/* TAB CONTENT */
 .tab-content {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
@@ -601,7 +601,7 @@ body {
     }
 }
 
-/* -------------------- LOGS STYLES -------------------- */
+/* LOGS STYLES */
 .capture-log {
     max-height: 400px;
     overflow-y: auto;
@@ -631,7 +631,7 @@ body {
 .log-entry.error { color: #e74c3c; }
 .log-entry.warn { color: #f39c12; }
 
-/* -------------------- ALERTS TABLE -------------------- */
+/* ALERTS TABLE */
 .alerts-table {
     width: 100%;
     border-collapse: collapse;
@@ -664,7 +664,7 @@ body {
     background: #e3f2fd;
 }
 
-/* -------------------- STATS GRID -------------------- */
+/* STATS GRID */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -697,8 +697,8 @@ body {
     opacity: 0.9;
 }
 
-/* -------------------- REPORTS STYLES -------------------- */
-/* ===== ENHANCED REPORTS & PDF STYLES ===== */
+/* REPORTS STYLES */
+/* ENHANCED REPORTS & PDF STYLES */
 
 /* Reports Search & Filter Improvements */
 .report-filters {
@@ -1159,7 +1159,7 @@ body {
     animation: spin 1s linear infinite;
 }
 
-/* ===== DARK MODE FIXES FOR REPORT SECTIONS ===== */
+/* DARK MODE FIXES FOR REPORT SECTIONS */
 /* Ensure all text in report sections stays dark and readable in both modes */
 .modal-content .report-section,
 .modal-content .report-details,
@@ -1352,7 +1352,7 @@ body {
     color: #3498db;
 }
 
-/* -------------------- THREAT VISUALIZATION -------------------- */
+/* THREAT VISUALIZATION */
 .threat-card {
     position: relative;
     min-height: 350px;
@@ -1389,7 +1389,7 @@ body {
     width: 100% !important;
 }
 
-/* -------------------- MODEL INFO -------------------- */
+/* MODEL INFO */
 .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1456,7 +1456,7 @@ body {
     background: #e3f2fd;
 }
 
-/* -------------------- ACCESSIBILITY ENHANCEMENTS -------------------- */
+/* ACCESSIBILITY ENHANCEMENTS */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -1503,7 +1503,7 @@ input:focus {
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-/* -------------------- RESPONSIVE DESIGN -------------------- */
+/* RESPONSIVE DESIGN */
 @media (max-width: 1024px) {
     .nav-tab {
         padding: 0 18px;
