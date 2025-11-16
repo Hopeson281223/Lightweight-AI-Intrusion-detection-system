@@ -12,7 +12,7 @@ class LAIIDSFrontend {
     }
 
     init() {
-        console.log("🔄 Initializing LAI-IDS Frontend...");
+        console.log("Initializing LAI-IDS Frontend...");
         this.bindEvents();
         this.bindNavbar();
         this.updateInterfaceStatus();
@@ -29,7 +29,7 @@ class LAIIDSFrontend {
         setInterval(() => this.updateStats(), 4000);
         setInterval(() => this.updateSystemInfo(), 5000);
         
-        console.log("✅ Frontend initialized");
+        console.log("Frontend initialized");
     }
 
     bindNavbar() {
@@ -116,10 +116,10 @@ class LAIIDSFrontend {
             activeTab.setAttribute("aria-selected", "true");
             activePane.classList.add("active");
             activePane.removeAttribute("hidden");
-            console.log(`🔍 Switched to tab: ${tabId}`);
+            console.log(`Switched to tab: ${tabId}`);
             
             // Handle tab-specific actions
-            this.onTabActivated(tabId); // ADD THIS LINE
+            this.onTabActivated(tabId); 
         }
 
         // Close mobile menu if open
@@ -141,7 +141,7 @@ class LAIIDSFrontend {
                     if (this.chart) {
                         this.chart.resize(); // Properly resize the chart
                         this.chart.render(); // Ensure it's fully rendered
-                        console.log("📊 Chart resized and rendered for threat tab");
+                        console.log("Chart resized and rendered for threat tab");
                     }
                 }, 100);
                 break;
@@ -164,7 +164,7 @@ class LAIIDSFrontend {
         try {
             const response = await this.apiCall('/reports');
             this.displayReports(response.reports || []);
-            console.log(`📋 Loaded ${response.reports?.length || 0} reports`);
+            console.log(`Loaded ${response.reports?.length || 0} reports`);
         } catch (error) {
             console.error('Error loading reports:', error);
             this.displayReports([]);
@@ -333,7 +333,7 @@ class LAIIDSFrontend {
         this.trapFocus(modal);
     }
 
-    // ✅ ADDED: Focus trap for modal accessibility
+    // Focus trap for modal accessibility
     trapFocus(modal) {
         const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         const firstElement = focusableElements[0];
@@ -571,7 +571,7 @@ class LAIIDSFrontend {
 
     markAlertsAsRead() {
         // Reset unread alert count
-        this.unreadAlertCount = 0; // ✅ CORRECT - reset to zero
+        this.unreadAlertCount = 0; 
         
         // Update the badge display
         this.updateAlertBadge();
@@ -582,7 +582,7 @@ class LAIIDSFrontend {
             alertsTab.style.animation = '';
         }
         
-        console.log("🔔 Alerts marked as read - unread count reset to 0");
+        console.log("Alerts marked as read - unread count reset to 0");
     }
 
     incrementAlertCount() {
@@ -593,7 +593,7 @@ class LAIIDSFrontend {
         // Update the badge display
         this.updateAlertBadge();
         
-        console.log(`📈 Alert count: ${this.alertCount} total, ${this.unreadAlertCount} unread`);
+        console.log(`Alert count: ${this.alertCount} total, ${this.unreadAlertCount} unread`);
     }
 
     async updateSystemInfo() {
@@ -628,7 +628,7 @@ class LAIIDSFrontend {
         }
     }
 
-    // ✅ ADDED: Enhanced error handling for API calls
+    //  handling for API calls
     async apiCall(endpoint, method = 'GET', body = null) {
         try {
             const res = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -722,7 +722,7 @@ class LAIIDSFrontend {
 
     showAutoSelectNotification(interfaceName) {
         console.log(`🔄 Auto-selected active interface: ${interfaceName}`);
-        // Optional: Show a subtle notification
+        //  Show a subtle notification
         this.log(`Auto-selected active interface: ${interfaceName}`, 'info');
     }
 
@@ -782,7 +782,7 @@ class LAIIDSFrontend {
             description.textContent = this.getModelDescription(selectedModel);
         }
         
-        // ✅ NEW: Update model info display when model changes
+        // Update model info display when model changes
         this.updateCurrentModelInfo(selectedModel);
     }
 
@@ -815,7 +815,6 @@ class LAIIDSFrontend {
         }
     }
 
-
     async stopCapture() {
         try {
             const data = await this.apiCall('/stop', 'POST');
@@ -840,7 +839,7 @@ class LAIIDSFrontend {
             document.getElementById('captureStatus').textContent = cs.is_capturing ? 'Running' : 'Stopped';
             document.getElementById('currentInterface').textContent = cs.interface || '--';
 
-            console.log('📊 Raw threat distribution:', stats.threat_distribution);
+            console.log('Raw threat distribution:', stats.threat_distribution);
 
             this.updateThreatChart(stats.threat_distribution || {});
             
@@ -867,21 +866,21 @@ class LAIIDSFrontend {
             
             console.log('Processed models:', models);
             
-            // ✅ NEW: Cache the models for later use
+            // Cache the models for later use
             this.modelsCache = models;
             
             if (models && models.length > 0) {
                 // Update model comparison table
                 this.updateModelComparison(models);
                 
-                // ✅ NEW: Update current model info based on selected model
+                //  Update current model info based on selected model
                 const selectedModel = document.getElementById('modelSelect').value;
                 this.updateCurrentModelInfo(selectedModel);
                 
-                console.log('✅ Model info loaded and cached successfully');
+                console.log('Model info loaded and cached successfully');
             } else {
                 this.setFallbackModelInfo();
-                console.log('⚠️ No models found in response');
+                console.log('No models found in response');
             }
         } catch (error) {
             console.error('Error loading model info:', error);
@@ -911,7 +910,7 @@ class LAIIDSFrontend {
         document.getElementById('modelFeatures').textContent = '46';
     }
 
-    // ✅ NEW: Update the displayed model info based on selection
+    //  Update the displayed model info based on selection
     updateCurrentModelInfo(selectedModelType) {
         console.log(`🔄 Updating model info for: ${selectedModelType}`);
         
@@ -934,13 +933,13 @@ class LAIIDSFrontend {
         }
     }
 
-    // ✅ NEW: Get model by type from stored models
+    // Get model by type from stored models
     getModelByType(modelType) {
         if (!this.modelsCache) return null;
         return this.modelsCache.find(model => model.model_type === modelType);
     }
 
-    // ✅ NEW: Get features count with fallback
+    // Get features count with fallback
     getModelFeatures(model) {
         if (model.feature_names) {
             // If feature_names is an array, return its length
@@ -986,13 +985,13 @@ class LAIIDSFrontend {
             `;
         }).join('');
         
-        console.log('📊 Model comparison table updated');
+        console.log(' Model comparison table updated');
     }
 
     // Check if model is available
     checkModelAvailability(modelType) {
         // This would ideally check if the model file exists
-        // For now, we'll assume both models are available since they're in the database
+        // assuming both models are available since they're in the database
         return modelType === 'random_forest' || modelType === 'decision_tree';
     }
     
@@ -1037,7 +1036,7 @@ class LAIIDSFrontend {
             }
         });
         
-        console.log('✅ Threat chart initialized in "no data" state');
+        console.log('Threat chart initialized in "no data" state');
     }
 
     updateThreatChart(dist) {
@@ -1049,7 +1048,7 @@ class LAIIDSFrontend {
         // Get the threat card element
         const threatCard = document.querySelector('.threat-card');
         
-        console.log('📊 Raw threat distribution:', dist);
+        console.log('Raw threat distribution:', dist);
         
         // Extract values safely
         let normal = 0, anomalous = 0;
@@ -1059,7 +1058,7 @@ class LAIIDSFrontend {
             anomalous = parseInt(dist.ANOMALOUS) || 0;
         }
         
-        console.log(`📊 Raw threat data: NORMAL=${normal}, ANOMALOUS=${anomalous}`);
+        console.log(`Raw threat data: NORMAL=${normal}, ANOMALOUS=${anomalous}`);
         
         const total = normal + anomalous;
         
@@ -1078,7 +1077,7 @@ class LAIIDSFrontend {
                 threatCard.classList.add('no-data');
             }
             
-            console.log('📊 Chart: No data available - showing empty state');
+            console.log('Chart: No data available - showing empty state');
         } else {
             // WE HAVE DATA
             this.chart.data.labels = ['NORMAL', 'ANOMALOUS'];
@@ -1300,8 +1299,8 @@ class LAIIDSFrontend {
     
 }
 
-let app; // Make app global for testing
+let app; // Makes app global for testing
 document.addEventListener('DOMContentLoaded', () => {
     app = new LAIIDSFrontend();
-    window.app = app; // Expose to console for debugging
+    window.app = app; // Exposes to console for debugging
 });
