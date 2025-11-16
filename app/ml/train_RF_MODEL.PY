@@ -115,10 +115,10 @@ def save_training_metrics(model_name, dataset_name, metrics, model_size_kb, feat
             save_metrics(f"model_{model_name}_n_estimators", model_params.get('n_estimators', 100))
             save_metrics(f"model_{model_name}_max_depth", model_params.get('max_depth', 15))
         
-        print(f"✅ Training metrics saved to database for {model_name}")
+        print(f"Training metrics saved to database for {model_name}")
         return True
     except Exception as e:
-        print(f"❌ Error saving training metrics: {e}")
+        print(f"Error saving training metrics: {e}")
         return False
 
 def feature_importance_analysis(clf, feature_names=None):
@@ -131,13 +131,13 @@ def feature_importance_analysis(clf, feature_names=None):
         # Sort by importance
         feature_imp.sort(key=lambda x: x[1], reverse=True)
         
-        print("\n🔍 Top 10 Most Important Features:")
+        print("\nTop 10 Most Important Features:")
         for i, (feature, importance) in enumerate(feature_imp[:10]):
             print(f"  {i+1}. {feature}: {importance:.4f}")
             
         return feature_imp
     else:
-        print(f"\n📊 Feature Importance (Top 10):")
+        print(f"\nFeature Importance (Top 10):")
         indices = np.argsort(importances)[::-1][:10]
         for i, idx in enumerate(indices):
             print(f"  {i+1}. Feature {idx}: {importances[idx]:.4f}")
@@ -199,9 +199,9 @@ def main():
             label_classes=label_classes,
             model_type="random_forest"
         )
-        print("✅ Model info saved to database")
+        print("Model info saved to database")
     except Exception as e:
-        print(f"❌ Error saving model info: {e}")
+        print(f"Error saving model info: {e}")
 
     # Save training metrics to database
     save_training_metrics(
@@ -214,7 +214,7 @@ def main():
         model_params=model_params
     )
 
-    print("\n🎯 Random Forest Training Complete!")
+    print("\nRandom Forest Training Complete!")
     print(f"Model path: {MODEL_DIR / DATASET['model_name']}")
     print(f"Accuracy: {metrics['accuracy']:.4f}")
     print(f"Precision: {metrics['precision']:.4f}")
@@ -226,7 +226,7 @@ def main():
     print(f"Training time: {training_time:.2f} seconds")
     print(f"Features: {len(feature_names) if feature_names else X.shape[1]}")
     print(f"Number of trees: {model_params['n_estimators']}")
-    print("📊 All metrics saved to database!")
+    print("All metrics saved to database!")
 
 if __name__ == "__main__":
     main()

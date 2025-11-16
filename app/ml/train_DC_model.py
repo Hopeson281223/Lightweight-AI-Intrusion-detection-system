@@ -139,9 +139,9 @@ def main():
             feature_names=feature_names,
             label_classes=label_classes
         )
-        print("✅ Model info saved to database")
+        print("Model info saved to database")
     except Exception as e:
-        print(f"❌ Error saving model info: {e}")
+        print(f"Error saving model info: {e}")
 
     # Save training metrics to database
     save_training_metrics(
@@ -153,7 +153,7 @@ def main():
         training_time=training_time
     )
 
-    print("\n🎯 Training complete!")
+    print("\nTraining complete!")
     print(f"Model path: {MODEL_DIR / DATASET['model_name']}")
     print(f"Accuracy: {metrics['accuracy']:.4f}")
     print(f"Precision: {metrics['precision']:.4f}")
@@ -162,7 +162,7 @@ def main():
     print(f"Model size: {model_size_kb:.2f} KB")
     print(f"Training time: {training_time:.2f} seconds")
     print(f"Features: {len(feature_names) if feature_names else X.shape[1]}")
-    print("📊 All metrics saved to database!")
+    print("All metrics saved to database!")
 
 if __name__ == "__main__":
     main()
