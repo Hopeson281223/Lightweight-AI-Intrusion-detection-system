@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import joblib
 from collections import Counter
 from datetime import datetime
@@ -59,11 +59,21 @@ def evaluate_model(clf, X_test, y_test):
     recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
     f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
     
+    # ADD FALSE POSITIVE AND FALSE NEGATIVE RATES
+    cm = confusion_matrix(y_test, y_pred)
+    tn, fp, fn, tp = cm.ravel()
+    false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0
+    false_negative_rate = fn / (fn + tp) if (fn + tp) > 0 else 0 
+    true_positive_rate = tp / (tp + fn) if (tp + fn) > 0 else 0
+    
     report = classification_report(y_test, y_pred)
     print(f"\n Accuracy: {acc:.4f}")
     print(f"Precision: {precision:.4f}")
     print(f"Recall: {recall:.4f}")
     print(f"F1-Score: {f1:.4f}")
+    print(f"False Positive Rate: {false_positive_rate:.4f}") 
+    print(f"False Negative Rate: {false_negative_rate:.4f}")  
+    print(f"True Positive Rate: {true_positive_rate:.4f}")    
     
     # Random Forest specific metrics
     if hasattr(clf, 'oob_score_'):
@@ -76,6 +86,9 @@ def evaluate_model(clf, X_test, y_test):
         'precision': precision,
         'recall': recall,
         'f1_score': f1,
+        'false_positive_rate': false_positive_rate,  
+        'false_negative_rate': false_negative_rate,  
+        'true_positive_rate': true_positive_rate,    
         'classification_report': report
     }
     
@@ -99,6 +112,9 @@ def save_training_metrics(model_name, dataset_name, metrics, model_size_kb, feat
         save_metrics(f"model_{model_name}_precision", f"{metrics['precision']:.4f}")
         save_metrics(f"model_{model_name}_recall", f"{metrics['recall']:.4f}")
         save_metrics(f"model_{model_name}_f1_score", f"{metrics['f1_score']:.4f}")
+        save_metrics(f"model_{model_name}_false_positive_rate", f"{metrics['false_positive_rate']:.4f}")  
+        save_metrics(f"model_{model_name}_false_negative_rate", f"{metrics['false_negative_rate']:.4f}")  
+        save_metrics(f"model_{model_name}_true_positive_rate", f"{metrics['true_positive_rate']:.4f}")    
         save_metrics(f"model_{model_name}_size_kb", f"{model_size_kb:.2f}")
         save_metrics(f"model_{model_name}_feature_count", feature_count)
         save_metrics(f"model_{model_name}_training_time_seconds", f"{training_time:.2f}")
@@ -152,6 +168,10 @@ def main():
     print("[INFO] Label distribution:", Counter(y))
 
     X_train, X_test, y_train, y_test = split_data(X, y)
+
+    np.save(PREPROCESSED_DIR / "CIC_ALL_X_test_rf.npy", X_test)
+    np.save(PREPROCESSED_DIR / "CIC_ALL_y_test_rf.npy", y_test)
+    print(f"[INFO] Test set saved for future evaluation")
     print(f"[INFO] Train shape: {X_train.shape}, Test shape: {X_test.shape}")
 
     # Train Random Forest model
@@ -220,6 +240,8 @@ def main():
     print(f"Precision: {metrics['precision']:.4f}")
     print(f"Recall: {metrics['recall']:.4f}")
     print(f"F1-Score: {metrics['f1_score']:.4f}")
+    print(f"False Positive Rate: {metrics['false_positive_rate']:.4f}")  
+    print(f"False Negative Rate: {metrics['false_negative_rate']:.4f}")  
     if 'oob_score' in metrics:
         print(f"OOB Score: {metrics['oob_score']:.4f}")
     print(f"Model size: {model_size_kb:.2f} KB")

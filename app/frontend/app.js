@@ -19,7 +19,7 @@ class LAIIDSFrontend {
         this.loadInterfaces();
         this.initThreatChart();
         this.updateStats();
-        this.loadModelInfo();
+        this.loadModelInfo(); 
         this.startWebSocket();
         this.loadReports();
         this.updateModelStatus();
@@ -782,7 +782,7 @@ class LAIIDSFrontend {
     }
 
     showAutoSelectNotification(interfaceName) {
-        console.log(`🔄 Auto-selected active interface: ${interfaceName}`);
+        console.log(`Auto-selected active interface: ${interfaceName}`);
         //  Show a subtle notification
         this.log(`Auto-selected active interface: ${interfaceName}`, 'info');
     }
@@ -837,14 +837,8 @@ class LAIIDSFrontend {
         `;
         statusElement.style.display = 'flex';
         
-        // Update description
-        const description = statusElement.querySelector('.model-description');
-        if (description) {
-            description.textContent = this.getModelDescription(selectedModel);
-        }
-        
         // Update model info display when model changes
-        this.updateCurrentModelInfo(selectedModel);
+        this.updateModelInfoDisplay();
     }
 
     getModelDescription(modelType) {
@@ -925,133 +919,193 @@ class LAIIDSFrontend {
 
     async loadModelInfo() {
         try {
-            const response = await this.apiCall('/models');
-            console.log('Models API response:', response);
+            console.log('Loading model info from /model-info endpoint...');
+            const response = await this.apiCall('/model-info');
+            console.log('Model info API response:', response);
             
-            let models = [];
-            
-            // Handle different response formats
-            if (Array.isArray(response)) {
-                models = response;
-            } else if (response.available_models) {
-                models = response.available_models;
-            } else if (response.models) {
-                models = response.models;
-            }
-            
-            console.log('Processed models:', models);
-            
-            // Cache the models for later use
-            this.modelsCache = models;
-            
-            if (models && models.length > 0) {
-                // Update model comparison table
-                this.updateModelComparison(models);
+            if (response.models && response.models.length > 0) {
+                this.modelsCache = response.models;
+                console.log('Models cache updated with', this.modelsCache.length, 'models');
                 
-                //  Update current model info based on selected model
-                const selectedModel = document.getElementById('modelSelect').value;
-                this.updateCurrentModelInfo(selectedModel);
+                // Update the model info display
+                this.updateModelInfoDisplay();
                 
-                console.log('Model info loaded and cached successfully');
+                // Update comparison table with real data
+                this.updateModelComparisonTable(this.modelsCache);
             } else {
+                console.log('No model data from database, using fallback');
                 this.setFallbackModelInfo();
-                console.log('No models found in response');
             }
         } catch (error) {
             console.error('Error loading model info:', error);
             this.setFallbackModelInfo();
         }
     }
-    
-    // Helper function to determine accuracy based on model type
-    getModelAccuracy(model) {
-        if (model.model_type === 'random_forest') return '99.86%';
-        if (model.model_type === 'decision_tree') return '~99%';
-        return '≈90%';
-    }
 
-    // Update fallback to accept model type
-    setFallbackModelInfo(modelType = 'decision_tree') {
-        const isRandomForest = modelType === 'random_forest';
-        
-        document.getElementById('mlModel').textContent = isRandomForest ? 
-            'Random Forest (Default)' : 'Decision Tree (Default)';
-        document.getElementById('modelType').textContent = modelType;
-        document.getElementById('datasetName').textContent = 'CIC-IDS2017';
-        document.getElementById('modelSize').textContent = isRandomForest ? 
-            '45.4 MB' : '26.81 KB';
-        document.getElementById('modelAccuracy').textContent = isRandomForest ? 
-            '99.86%' : '~99%';
-        document.getElementById('modelFeatures').textContent = '46';
-    }
+    updateModelInfoDisplay() {
+        if (!this.modelsCache || this.modelsCache.length === 0) {
+            console.log('No models cache available');
+            this.setFallbackModelInfo();
+            return;
+        }
 
-    //  Update the displayed model info based on selection
-    updateCurrentModelInfo(selectedModelType) {
-        console.log(`Updating model info for: ${selectedModelType}`);
+        // Get the currently selected model from dropdown
+        const selectedModelType = document.getElementById('modelSelect').value;
+        console.log('Selected model type:', selectedModelType);
         
-        // Get the model data from our stored models
-        const selectedModel = this.getModelByType(selectedModelType);
+        // Find the model - use the first match (most recent)
+        const model = this.modelsCache.find(m => m.model_type === selectedModelType);
+        console.log('Found model:', model);
         
-        if (selectedModel) {
-            document.getElementById('mlModel').textContent = selectedModel.name || selectedModelType;
-            document.getElementById('modelType').textContent = selectedModel.model_type || selectedModelType;
-            document.getElementById('datasetName').textContent = selectedModel.dataset || 'CIC-IDS2017';
-            document.getElementById('modelSize').textContent = selectedModel.size_kb ? 
-                (selectedModel.size_kb > 1000 ? 
-                    `${(selectedModel.size_kb / 1024).toFixed(1)} MB` : 
-                    `${selectedModel.size_kb.toFixed(2)} KB`) : 'Unknown';
-            document.getElementById('modelAccuracy').textContent = this.getModelAccuracy(selectedModel);
-            document.getElementById('modelFeatures').textContent = this.getModelFeatures(selectedModel);
+        if (model) {
+            console.log('Using model data:', {
+                name: model.name,
+                model_type: model.model_type,
+                accuracy: model.accuracy,
+                size_kb: model.size_kb,
+                fpr: model.false_positive_rate,
+                fnr: model.false_negative_rate,
+                tpr: model.true_positive_rate
+            });
+            
+            document.getElementById('mlModel').textContent = this.formatModelName(model.model_type);
+            document.getElementById('modelType').textContent = model.model_type;
+            document.getElementById('modelAccuracy').textContent = model.accuracy ? 
+                `${(model.accuracy * 100).toFixed(2)}%` : '--';
+            document.getElementById('modelSize').textContent = model.size_kb ? 
+                this.formatModelSize(model.size_kb) : '--';
+            
+            // Update security metrics
+            this.updateSecurityMetrics(model);
+            
+            console.log(`Updated model info for: ${model.model_type}`);
         } else {
-            // Fallback for when model data isn't found
+            console.log('No matching model found, using fallback');
             this.setFallbackModelInfo(selectedModelType);
         }
     }
 
-    // Get model by type from stored models
-    getModelByType(modelType) {
-        if (!this.modelsCache) return null;
-        return this.modelsCache.find(model => model.model_type === modelType);
+    // Make sure formatModelName is working correctly:
+    formatModelName(modelType) {
+        const names = {
+            'random_forest': 'Random Forest',
+            'decision_tree': 'Decision Tree'
+        };
+        return names[modelType] || modelType;
     }
 
-    // Get features count with fallback
-    getModelFeatures(model) {
-        if (model.feature_names) {
-            // If feature_names is an array, return its length
-            if (Array.isArray(model.feature_names)) {
-                return model.feature_names.length;
-            }
-            // If feature_names is a JSON string, parse it
-            try {
-                const features = JSON.parse(model.feature_names);
-                return Array.isArray(features) ? features.length : 'Unknown';
-            } catch (e) {
-                return 'Unknown';
-            }
+    // Make sure formatModelSize is working:
+    formatModelSize(sizeKb) {
+        if (sizeKb > 1024) {
+            return `${(sizeKb / 1024).toFixed(1)} MB`;
         }
-        return model.model_type === 'random_forest' ? '46' : '46';
+        return `${sizeKb.toFixed(2)} KB`;
     }
 
-    // Update model comparison to use cached models
-    updateModelComparison(models) {
-        const tbody = document.getElementById('modelComparisonBody');
-        if (!tbody || !models || models.length === 0) return;
+    // Make sure updateSecurityMetrics is working:
+    updateSecurityMetrics(model) {
+        console.log('Updating security metrics:', {
+            fpr: model.false_positive_rate,
+            fnr: model.false_negative_rate, 
+            tpr: model.true_positive_rate
+        });
+        
+        // Update security metrics if available
+        if (model.false_positive_rate !== undefined && model.false_positive_rate !== null) {
+            document.getElementById('modelFPR').textContent = `${(model.false_positive_rate * 100).toFixed(2)}%`;
+        } else {
+            document.getElementById('modelFPR').textContent = '--';
+        }
+        
+        if (model.false_negative_rate !== undefined && model.false_negative_rate !== null) {
+            document.getElementById('modelFNR').textContent = `${(model.false_negative_rate * 100).toFixed(2)}%`;
+        } else {
+            document.getElementById('modelFNR').textContent = '--';
+        }
+        
+        if (model.true_positive_rate !== undefined && model.true_positive_rate !== null) {
+            document.getElementById('modelTPR').textContent = `${(model.true_positive_rate * 100).toFixed(2)}%`;
+        } else {
+            document.getElementById('modelTPR').textContent = '--';
+        }
+    }
+    
+    // Update fallback to accept model type
+    setFallbackModelInfo(modelType = 'decision_tree') {
+        const isRandomForest = modelType === 'random_forest';
+        
+        console.log('Setting fallback model info for:', modelType);
+        
+        // Safe element updates with null checks
+        const elements = {
+            'mlModel': document.getElementById('mlModel'),
+            'modelType': document.getElementById('modelType'),
+            'modelAccuracy': document.getElementById('modelAccuracy'),
+            'modelSize': document.getElementById('modelSize'),
+            'modelFPR': document.getElementById('modelFPR'),
+            'modelFNR': document.getElementById('modelFNR'),
+            'modelTPR': document.getElementById('modelTPR'),
+            'modelTrainTime': document.getElementById('modelTrainTime')
+        };
+        
+        // Only update elements that exist
+        if (elements.mlModel) {
+            elements.mlModel.textContent = isRandomForest ? 'Random Forest' : 'Decision Tree';
+        }
+        if (elements.modelType) {
+            elements.modelType.textContent = modelType;
+        }
+        if (elements.modelAccuracy) {
+            elements.modelAccuracy.textContent = '--';
+        }
+        if (elements.modelSize) {
+            elements.modelSize.textContent = '--';
+        }
+        if (elements.modelFPR) {
+            elements.modelFPR.textContent = '--';
+        }
+        if (elements.modelFNR) {
+            elements.modelFNR.textContent = '--';
+        }
+        if (elements.modelTPR) {
+            elements.modelTPR.textContent = '--';
+        }
+        if (elements.modelTrainTime) {
+            elements.modelTrainTime.textContent = '--';
+        }
+    }
 
-        tbody.innerHTML = models.map(model => {
-            const isRandomForest = model.model_type === 'random_forest';
-            const isDecisionTree = model.model_type === 'decision_tree';
-            
-            const icon = isRandomForest ? '🟢' : '⚡';
-            const accuracy = this.getModelAccuracy(model);
-            const speed = isRandomForest ? '🐢 Slower' : '⚡ Fast';
-            const memory = model.size_kb ? (model.size_kb > 1000 ? 
-                `${(model.size_kb / 1024).toFixed(1)} MB` : 
-                `${model.size_kb.toFixed(1)} KB`) : 'Unknown';
-            const bestFor = isRandomForest ? 'High-accuracy detection' : 'Real-time monitoring';
+    updateModelComparisonTable(models) {
+        const tbody = document.getElementById('modelComparisonBody');
+        if (!tbody) return;
+
+        if (!models || models.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No model data available</td></tr>';
+            return;
+        }
+
+        // Get unique models by type (remove duplicates)
+        const uniqueModels = [];
+        const seenTypes = new Set();
+        
+        models.forEach(model => {
+            if (!seenTypes.has(model.model_type)) {
+                seenTypes.add(model.model_type);
+                uniqueModels.push(model);
+            }
+        });
+
+        console.log('Unique models for comparison:', uniqueModels);
+
+        tbody.innerHTML = uniqueModels.map(model => {
+            const accuracy = model.accuracy ? `${(model.accuracy * 100).toFixed(2)}%` : 'Unknown';
+            const speed = model.model_type === 'random_forest' ? '🐢 Slower' : '⚡ Fast';
+            const memory = model.size_kb ? this.formatModelSize(model.size_kb) : 'Unknown';
+            const bestFor = model.model_type === 'random_forest' ? 'High-accuracy detection' : 'Real-time monitoring';
             
             return `
                 <tr>
-                    <td>${icon} ${model.name || model.model_type}</td>
+                    <td>${this.formatModelName(model.model_type)}</td>
                     <td>${accuracy}</td>
                     <td>${speed}</td>
                     <td>${memory}</td>
@@ -1059,8 +1113,6 @@ class LAIIDSFrontend {
                 </tr>
             `;
         }).join('');
-        
-        console.log(' Model comparison table updated');
     }
 
     // Check if model is available
@@ -1369,6 +1421,20 @@ class LAIIDSFrontend {
         } else {
             dot.className = 'status-dot stopped';
             text.textContent = 'Stopped';
+        }
+    }
+
+    async loadAllModelData() {
+        try {
+            // Load basic model info
+            await this.loadModelInfo();
+            
+            // Load detailed metrics
+            await this.loadModelMetrics();
+            
+            console.log('All model data loaded successfully');
+        } catch (error) {
+            console.error('Error loading model data:', error);
         }
     }
     

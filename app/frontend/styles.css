@@ -1407,6 +1407,39 @@ body {
 }
 
 /* MODEL INFO */
+.security-metrics {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 8px 0;
+    padding: 5px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.metric-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.metric-value {
+    font-weight: 700;
+    color: #28a745;
+}
+
+.metric-value.warning {
+    color: #ffc107;
+}
+
+.metric-value.danger {
+    color: #dc3545;
+}
+
 .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

@@ -217,13 +217,15 @@
             <div class="tab-pane" id="modelTab" role="tabpanel" aria-labelledby="modelTab" tabindex="0" hidden>
                 <div class="card model-card">
                     <h2><i class="fas fa-robot" aria-hidden="true"></i> Model Info</h2>
+                    <!-- In your model-card div -->
                     <div class="info-grid">
                         <div class="info-item"><span>Current Model:</span> <span id="mlModel">--</span></div>
                         <div class="info-item"><span>Model Type:</span> <span id="modelType">--</span></div>
-                        <div class="info-item"><span>Dataset:</span> <span id="datasetName">--</span></div>
                         <div class="info-item"><span>Accuracy:</span> <span id="modelAccuracy">--</span></div>
-                        <div class="info-item"><span>Size (KB):</span> <span id="modelSize">--</span></div>
-                        <div class="info-item"><span>Features:</span> <span id="modelFeatures">--</span></div>
+                        <div class="info-item"><span>False Positive Rate:</span> <span id="modelFPR">--</span></div>
+                        <div class="info-item"><span>False Negative Rate:</span> <span id="modelFNR">--</span></div>
+                        <div class="info-item"><span>True Positive Rate:</span> <span id="modelTPR">--</span></div>
+                        <div class="info-item"><span>Size:</span> <span id="modelSize">--</span></div>
                     </div>
                     
                     <!-- Model Comparison Table -->

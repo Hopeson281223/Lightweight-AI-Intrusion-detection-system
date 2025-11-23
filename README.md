@@ -18,5 +18,11 @@ pip install -r requirements.txt
 # Initialize database
 python scripts/setup_db.py
 
+# Train Decision Tree model
+python -m app.ml.train_DT_model
+
+# Train Random Forest model  
+python -m app.ml.train_RF_model
+
 # Run API in virtual environment
 uvicorn app.main:app --reload

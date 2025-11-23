@@ -401,10 +401,6 @@ async def websocket_logs(websocket: WebSocket):
     except Exception as e:
         print(f"[WS] Connection closed: {e}")
 
-@app.get("/packets")
-def get_packets():
-    return [{"id": 1, "src_ip": "192.168.0.10", "dst_ip": "10.0.0.5", "protocol": "TCP"}]
-
 @app.get("/system")
 def get_system_info():
     """Get LAI-IDS application specific system information"""
@@ -447,94 +443,67 @@ def get_system_info():
             'total_memory_gb': 0
         }
       
-@app.get("/metrics")
-def get_metrics():
+@app.get("/model-info")
+def get_model_info():
+    """Get comprehensive model information for the frontend Model Info tab"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, value, ts FROM metrics ORDER BY ts DESC")
-    rows = cur.fetchall()
-    conn.close()
-    return {"metrics": [{"name": r[0], "value": r[1], "timestamp": r[2]} for r in rows]}
-
-@app.get("/available-models")
-def get_available_models():
-    """Get list of available models for the frontend"""
-    available_models = []
     
-    # Check for decision tree model
-    dt_path = MODEL_DIR / "decision_tree_cic_model.joblib"
-    if dt_path.exists():
-        available_models.append({
-            "name": "Decision Tree",
-            "type": "decision_tree",
-            "description": "Fast and lightweight model for real-time detection",
-            "accuracy": "~99%",
-            "speed": "⚡ Fast",
-            "size": "Small"
-        })
-    
-    # Check for random forest model
-    rf_path = MODEL_DIR / "random_forest_cic_model.joblib"
-    if rf_path.exists():
-        available_models.append({
-            "name": "Random Forest", 
-            "type": "random_forest",
-            "description": "High-accuracy ensemble model for reliable detection",
-            "accuracy": "99.86%",
-            "speed": "🐢 Slower", 
-            "size": "Large"
-        })
-    
-    return {"available_models": available_models}
-
-@app.get("/models")
-def get_models():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT name, dataset, path, size_kb, timestamp, model_type FROM models ORDER BY timestamp DESC")
-    rows = cur.fetchall()
-    conn.close()
-    return [
-        {
-            "name": r[0], 
-            "dataset": r[1], 
-            "path": r[2], 
-            "size_kb": r[3], 
-            "timestamp": r[4],
-            "model_type": r[5] or "decision_tree"  # Handle NULL values
-        }
-        for r in rows
-    ]
-
-# Session management endpoints
-@app.get("/sessions")
-def get_sessions(limit: int = 10):
-    """Get recent capture sessions"""
     try:
-        from app.storage.db import get_recent_sessions
-        sessions = get_recent_sessions(limit)
-        return {"sessions": sessions}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sessions: {e}")
-
-@app.get("/sessions/{session_id}")
-def get_session_details(session_id: str):
-    """Get detailed information for a specific session"""
-    try:
-        from app.storage.db import get_current_session_stats
-        session_stats = get_current_session_stats(session_id)
+        # Get the most recent models with their metrics
+        cur.execute("""
+            SELECT 
+                m.name,
+                m.model_type,
+                m.dataset,
+                m.size_kb,
+                m.timestamp,
+                -- Get accuracy metric
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_accuracy' ORDER BY ts DESC LIMIT 1) as accuracy,
+                -- Get false positive rate
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_false_positive_rate' ORDER BY ts DESC LIMIT 1) as false_positive_rate,
+                -- Get false negative rate  
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_false_negative_rate' ORDER BY ts DESC LIMIT 1) as false_negative_rate,
+                -- Get true positive rate
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_true_positive_rate' ORDER BY ts DESC LIMIT 1) as true_positive_rate,
+                -- Get training time
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_training_time' ORDER BY ts DESC LIMIT 1) as training_time,
+                -- Get feature names
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_feature_names' ORDER BY ts DESC LIMIT 1) as feature_names,
+                -- Get feature count
+                (SELECT value FROM metrics WHERE name LIKE 'model_' || m.name || '_feature_count' ORDER BY ts DESC LIMIT 1) as feature_count
+            FROM models m
+            ORDER BY m.timestamp DESC
+        """)
         
-        if not session_stats["session_info"]:
-            raise HTTPException(status_code=404, detail="Session not found")
-            
-        return {
-            "session_info": session_stats["session_info"],
-            "threat_distribution": session_stats["threat_distribution"],
-            "recent_alerts": session_stats["recent_alerts"]
-        }
+        rows = cur.fetchall()
+        models = []
+        
+        for row in rows:
+            model = {
+                "name": row[0],
+                "model_type": row[1] or "decision_tree",
+                "dataset": row[2],
+                "size_kb": float(row[3]) if row[3] else None,
+                "timestamp": row[4],
+                "accuracy": float(row[5]) if row[5] else None,
+                "false_positive_rate": float(row[6]) if row[6] else None,
+                "false_negative_rate": float(row[7]) if row[7] else None,
+                "true_positive_rate": float(row[8]) if row[8] else None,
+                "training_time": float(row[9]) if row[9] else None,
+                "feature_names": json.loads(row[10]) if row[10] else [],
+                "feature_count": int(row[11]) if row[11] else None
+            }
+            models.append(model)
+        
+        return {"models": models}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting session details: {e}")
-    
+        print(f"Error fetching model info: {e}")
+        return {"models": [], "error": str(e)}
+    finally:
+        conn.close()
+  
 @app.get("/reports")
 def list_reports():
     """List all generated session reports"""
@@ -847,18 +816,3 @@ def download_report(session_id: str):
         print(f"PDF generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
     
-@app.get("/debug/sessions")
-def debug_sessions():
-    """Debug endpoint to see all sessions"""
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, start_time, end_time, total_predictions FROM sessions ORDER BY start_time DESC LIMIT 5")
-    sessions = [dict(row) for row in cur.fetchall()]
-    conn.close()
-    
-    current_session = packet_capture.get_status()
-    
-    return {
-        "current_session": current_session,
-        "recent_sessions": sessions
-    }
